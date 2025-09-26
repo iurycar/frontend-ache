@@ -12,19 +12,21 @@ import SpreadsheetDetailView from './SpreadsheetDetailView';
 interface UploadedFile {
   id: string;
   name: string;
-  importedAt: string; 
+  importedAt: string;
 }
 
 interface SpreadsheetViewerProps {
   onSpreadsheetSelect?: (spreadsheetId: string) => void;
   selectedSpreadsheetId?: string;
   onBackToList?: () => void;
+  reloadTrigger?: number;
 }
 
 const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({ 
   onSpreadsheetSelect, 
   selectedSpreadsheetId, 
-  onBackToList 
+  onBackToList,
+  reloadTrigger,
 }) => {
   const [importedFiles, setImportedFiles] = useState<UploadedFile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -55,7 +57,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({
 
   useEffect(() => {
     fetchImportedFiles();
-  }, []);
+  }, [reloadTrigger]);
 
   const filteredFiles = useMemo(() => {
     return importedFiles.filter(file =>

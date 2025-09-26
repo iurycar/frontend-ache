@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X } from 'lucide-react';
-// Removidos 'useSpreadsheet', 'useLocale', 'useNotifications' e 'importExcelFile' que não são mais necessários aqui.
 
 interface SpreadsheetImporterProps {
   onImportComplete?: () => void;

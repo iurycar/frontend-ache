@@ -5,16 +5,17 @@ import SpreadsheetViewer from '../components/SpreadsheetViewer';
 
 const PackagingAnalysis: React.FC = () => {
   const [selectedSpreadsheetId, setSelectedSpreadsheetId] = useState<string | undefined>();
-
-
+  const [reloadTrigger, setReloadTrigger] = useState(0);
+  
   return (
     <Layout title="Planilhas Importadas">
       <div className="space-y-6">
-        <SpreadsheetImporter />
+        <SpreadsheetImporter onImportComplete={() => setReloadTrigger((v) => v + 1)} />
         <SpreadsheetViewer 
           selectedSpreadsheetId={selectedSpreadsheetId}
           onSpreadsheetSelect={setSelectedSpreadsheetId}
           onBackToList={() => setSelectedSpreadsheetId(undefined)}
+          reloadTrigger={reloadTrigger}
         />
       </div>
     </Layout>

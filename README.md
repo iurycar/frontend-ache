@@ -7,7 +7,7 @@ Esses são os arquivos utilizados para o desenvolvimento do Frontend do projeto 
 ## Funcionalidades Principais
 
 ### Processamento de Planilhas
-- **Importação Excel**: Suporte para arquivos .xlsx e .xls
+- **Importação Excel**: Suporte para arquivos `.xlsx` e `.xls`
 - **Conversão Automática**: Converte cada linha da planilha em uma nova tarefa
 - **Gerenciamento**: Gerencia os status do andamento das tarefas:
   - 100% → "Concluído"
@@ -32,25 +32,29 @@ Esses são os arquivos utilizados para o desenvolvimento do Frontend do projeto 
 - npm ou yarn
 
 ### Instalação
-```bash
+`bash`
+```
 # Clonar o repositório
 git clone https://github.com/iurycar/frontend-ache
 cd frontend-ache
-
+```
+```
 # Instalar dependências
 npm install
-
+```
+```
 # Executar em modo de desenvolvimento
 npm run dev
-
+```
+```
 # Construir para produção
 npm run build
 ```
 
 ### CONFIGURAÇÄO DO BACKEND
-Esse é um passo essencial para o funcionamento do projeto. A Melora possui uma repositório dedicado. [iurycar/Melora](https://github.com/iurycar/Melora-chatbot)
+Esse é um passo essencial para o funcionamento do projeto. A Melora possui uma repositório dedicado em [iurycar/Melora](https://github.com/iurycar/Melora-chatbot).
 Para configurar o backend e a Melora:
-1. Acesse e clone o [Backend](https://github.com/iurycar/backend-ache)
+1. Acesse e clone o repositório [Backend Aché](https://github.com/iurycar/backend-ache)
 2. Siga o passo a passo descrito no repositório para configurar
 
 ## Como Usar
