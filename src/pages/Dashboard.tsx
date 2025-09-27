@@ -15,7 +15,7 @@ const Dashboard: React.FC = () => {
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
 
-  const didFetchRef = useRef(false);
+  const didFetchFilesRef = useRef(false);
 
   useEffect(() => {
     const fetchFromBackend = async () => {
@@ -27,11 +27,9 @@ const Dashboard: React.FC = () => {
         if (!response.ok) return;
         const result = await response.json();
 
-        // Evita duplicar planilhas já existentes no contexto
         const existingIds = new Set(importedSpreadsheets.map((s) => s.id));
-
         (result.arquivos || []).forEach((file: any) => {
-          if (existingIds.has(file.id)) return; // já existe, não adiciona
+          if (existingIds.has(file.id)) return;
           addSpreadsheet({
             id: file.id,
             name: file.name,
@@ -47,8 +45,8 @@ const Dashboard: React.FC = () => {
       }
     };
 
-    if (didFetchRef.current) return;
-    didFetchRef.current = true;
+    if (didFetchFilesRef.current) return;
+    didFetchFilesRef.current = true;
     fetchFromBackend();
   }, [addSpreadsheet, importedSpreadsheets]);
 
@@ -70,10 +68,11 @@ const Dashboard: React.FC = () => {
       const mapped: Task[] = dados.map((row: any, idx: number) => {
         const pctRaw = row?.conclusion;
         let pct = 0;
-        if (typeof pctRaw === 'number') pct = Math.round(pctRaw * 100);
-        else {
+        if (typeof pctRaw === 'number') {
+          pct = pctRaw > 1 ? Math.round(pctRaw) : Math.round(pctRaw * 100);
+        } else {
           const n = parseFloat(pctRaw);
-          pct = isNaN(n) ? 0 : Math.round(n * 100);
+          if (!isNaN(n)) pct = n > 1 ? Math.round(n) : Math.round(n * 100);
         }
         return {
           id: String(row?.num ?? idx),
@@ -87,10 +86,11 @@ const Dashboard: React.FC = () => {
           percentualConcluido: Math.min(100, Math.max(0, pct)),
           startDate: row?.start_date ?? null,
           endDate: row?.end_date ?? null,
+          atraso: Number(row?.atraso ?? 0),
         };
       });
       setTasks(mapped);
-    } catch (e) {
+    } catch {
       setTasksError('Erro ao carregar dados da planilha.');
       setTasks([]);
     } finally {
@@ -102,7 +102,6 @@ const Dashboard: React.FC = () => {
     fetchSpreadsheetTasks(selectedSpreadsheetId);
   }, [selectedSpreadsheetId]);
 
-  // Handlers para iniciar/desfazer início de tarefa
   const handleTaskStart = async (id: string) => {
     if (!selectedSpreadsheetId) return;
     try {
@@ -111,10 +110,8 @@ const Dashboard: React.FC = () => {
         { method: 'POST', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao iniciar tarefa');
-      // Atualiza localmente (usa horário local apenas para refletir)
-      const nowIso = new Date().toISOString();
-      setTasks(prev => prev.map(t => (t.id === id ? { ...t, startDate: nowIso } : t)));
-    } catch (e) {
+      await fetchSpreadsheetTasks(selectedSpreadsheetId);
+    } catch {
       alert('Não foi possível iniciar a tarefa.');
     }
   };
@@ -127,26 +124,22 @@ const Dashboard: React.FC = () => {
         { method: 'DELETE', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao desfazer início');
-      setTasks(prev => prev.map(t => (t.id === id ? { ...t, startDate: null } : t)));
-    } catch (e) {
+      await fetchSpreadsheetTasks(selectedSpreadsheetId);
+    } catch {
       alert('Não foi possível desfazer o início da tarefa.');
     }
   };
 
-  // Handlers adaptados da versão antiga
   const handleTaskUpdate = async (updated: Task) => {
     try {
-      // Mapeia para os campos do backend
       const payload = {
-        // Se o usuário mudou "Número", enviamos o novo valor em 'num'
         num: Number(updated.numero),
         classe: updated.classificacao,
         category: updated.categoria,
         phase: updated.fase,
-        status: updated.condicao, // coluna 'status' no backend carrega a "Condição"
+        status: updated.condicao,
         name: updated.nome,
         duration: updated.duracao,
-        // Backend armazena 0–1; UI usa 0–100
         conclusion: Number.isFinite(updated.percentualConcluido)
           ? Number(updated.percentualConcluido) / 100
           : 0,
@@ -162,12 +155,8 @@ const Dashboard: React.FC = () => {
         }
       );
       if (!res.ok) throw new Error('Falha ao salvar tarefa');
-
-      // Se o número foi alterado, o "id" da linha muda para o novo número
-      const newId = String(payload.num);
-      const saved: Task = { ...updated, id: newId };
-      setTasks(prev => prev.map(t => (t.id === updated.id ? saved : t)));
-    } catch (e) {
+      await fetchSpreadsheetTasks(selectedSpreadsheetId);
+    } catch {
       alert('Não foi possível salvar a tarefa no servidor.');
     }
   };
@@ -180,21 +169,19 @@ const Dashboard: React.FC = () => {
     try {
       const res = await fetch(
         `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${encodeURIComponent(id)}`,
-        {
-          method: 'DELETE',
-          credentials: 'include',
-        }
+        { method: 'DELETE', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao excluir a tarefa.');
-      setTasks(prev => prev.filter(t => t.id !== id));
-    } catch (e) {
+      await fetchSpreadsheetTasks(selectedSpreadsheetId);
+    } catch {
       alert('Não foi possível excluir a tarefa no servidor.');
     }
   };
 
   const handleTaskAdd = () => {
-    const newId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
-    setTasks(prev => [
+    const newId =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
+    setTasks((prev) => [
       ...prev,
       {
         id: newId,
@@ -206,47 +193,32 @@ const Dashboard: React.FC = () => {
         nome: 'Nova Tarefa',
         duracao: '',
         percentualConcluido: 0,
-      },
+      } as unknown as Task,
     ]);
   };
 
   const filteredTasks = useMemo(() => {
-    let rows = tasks;
+    const f = filters || {};
+    const condSel = (f.condicao && f.condicao[0]) || '';
+    const statusSel = (f.status && f.status[0]) || '';
+    const isSempre = (cond: string) => (cond || '').toLowerCase() === 'sempre';
+    const isOverdue = (t: Task): boolean => Number((t as any).atraso || 0) > 0;
 
-    if (filters.developmentType && filters.developmentType.length > 0) {
-      const devs = filters.developmentType.map((s) => s.toLowerCase());
-      rows = rows.filter((r) => devs.some((d) => (r.classificacao || '').toLowerCase().includes(d)));
-    }
+    const statusLabel = (t: Task): 'Concluídas' | 'Em andamento' | 'Não iniciada' | 'Atrasadas' => {
+      if ((t as any).percentualConcluido === 100) return 'Concluídas';
+      if (isOverdue(t)) return 'Atrasadas';
+      if ((t as any).percentualConcluido === 0) return 'Não iniciada';
+      return 'Em andamento';
+    };
 
-    if (filters.category && filters.category.length > 0) {
-      const cats = filters.category.map((s) => s.toLowerCase());
-      rows = rows.filter((r) => cats.some((c) => (r.categoria || '').toLowerCase().includes(c)));
-    }
-
-    if (filters.objective && filters.objective.length > 0) {
-      const map: Record<string, string> = {
-        scope: 'Escopo',
-        research: 'Pesquisa',
-        prototype: 'Protótipo',
-        validation: 'Validação',
-        feasibility: 'Viabilidade',
-        implementation: 'Implementação',
-      };
-      const needles = filters.objective.map((k) => map[k] || '').filter(Boolean);
-      rows = rows.filter((r) =>
-        needles.some((n) => (r.fase || '').toLowerCase().includes(n.toLowerCase()))
-      );
-    }
-
-    if (filters.condicao && filters.condicao.length > 0) {
-      const selected = (filters.condicao[0] || '').toString().trim().toLowerCase();
-      rows = rows.filter((r) => {
-        const c = (r.condicao || '').toString().trim().toLowerCase();
-        return c === 'sempre' || c === selected;
-      });
-    }
-
-    return rows;
+    return (tasks || []).filter((t) => {
+      if (f.classificacao?.length && !f.classificacao.includes((t as any).classificacao)) return false;
+      if (f.category?.length && !f.category.includes((t as any).categoria)) return false;
+      if (condSel && !isSempre((t as any).condicao) && (t as any).condicao !== condSel) return false;
+      if (f.objective?.length && !f.objective.includes((t as any).fase)) return false;
+      if (statusSel && statusLabel(t) !== statusSel) return false;
+      return true;
+    });
   }, [tasks, filters]);
 
   return (
@@ -281,8 +253,8 @@ const Dashboard: React.FC = () => {
           onTaskUpdate={handleTaskUpdate}
           onTaskDelete={handleTaskDelete}
           onTaskAdd={handleTaskAdd}
-          onTaskStart={handleTaskStart}        // <- novo
-          onTaskUnstart={handleTaskUnstart}    // <- novo
+          onTaskStart={handleTaskStart}
+          onTaskUnstart={handleTaskUnstart}
         />
       ) : (
         <div className="text-center text-gray-500 mt-10">

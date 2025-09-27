@@ -7,12 +7,13 @@ export interface Task {
   classificacao: string;
   categoria: string;
   fase: string;
-  condicao: string; // '', 'Sempre', 'A', 'B', 'C'
+  condicao: string;
   nome: string;
   duracao: string;
-  percentualConcluido: number; // 0-100
+  percentualConcluido: number;
   startDate?: string | null;
   endDate?: string | null;
+  atraso?: number;
 }
 
 interface ScheduleTableProps {
@@ -20,26 +21,14 @@ interface ScheduleTableProps {
   loading?: boolean;
   error?: string | null;
   onRefresh?: () => void;
-
-  // Callbacks
   onTaskUpdate?: (task: Task) => void | Promise<void>;
   onTaskDelete?: (id: string) => void | Promise<void>;
   onTaskAdd?: () => void;
   onTaskStart?: (id: string) => void | Promise<void>;
   onTaskUnstart?: (id: string) => void | Promise<void>;
-
-  // Opções (opcional)
   classificacaoOptions?: string[];
   categoriaOptions?: string[];
   faseOptions?: string[];
-}
-
-// Status derivado do percentual
-function getStatusFromPercent(percent: number): { text: string; cls: string } {
-  const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
-  if (p === 100) return { text: 'Concluído', cls: 'bg-green-100 text-green-800' };
-  if (p === 0) return { text: 'Não iniciado', cls: 'bg-gray-100 text-gray-800' };
-  return { text: 'Em Andamento', cls: 'bg-yellow-100 text-yellow-800' };
 }
 
 function uniqueNonEmpty(values: (string | undefined | null)[]): string[] {
@@ -54,6 +43,36 @@ function uniqueNonEmpty(values: (string | undefined | null)[]): string[] {
     }
   });
   return out;
+}
+
+function parseDateSafe(iso?: string | null): Date | null {
+  if (!iso) return null;
+  const s = String(iso).trim();
+
+  if (/[zZ]$|[+\-]\d{2}:\d{2}$/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) {
+    const [, Y, M, D, h, mi, sec] = m;
+    return new Date(Number(Y), Number(M) - 1, Number(D), Number(h), Number(mi), Number(sec || '0'));
+    }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateTime(iso?: string | null): string {
+  const d = parseDateSafe(iso);
+  if (!d) return '';
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 const ScheduleTable: React.FC<ScheduleTableProps> = ({
@@ -73,8 +92,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const [deleteStage, setDeleteStage] = useState<0 | 2>(0); // 0=none, 2=modal delete
-  const [pendingUnstartId, setPendingUnstartId] = useState<string | null>(null); // confirmar desfazer início
+  const [deleteStage, setDeleteStage] = useState<0 | 2>(0);
+  const [pendingUnstartId, setPendingUnstartId] = useState<string | null>(null);
 
   const classificacaoOpts = useMemo(
     () => classificacaoOptions ?? uniqueNonEmpty(tasks.map((t) => t.classificacao)),
@@ -103,6 +122,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     if (editedTask && onTaskUpdate) {
       const p = Math.max(0, Math.min(100, Math.round(Number(editedTask.percentualConcluido) || 0)));
       await Promise.resolve(onTaskUpdate({ ...editedTask, percentualConcluido: p }));
+      if (onRefresh) await Promise.resolve(onRefresh());
+      else if (typeof window !== 'undefined') window.location.reload();
     }
     setEditingId(null);
     setEditedTask(null);
@@ -156,14 +177,14 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
             <thead className="bg-gray-200 dark:bg-gray-800">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Início</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Número</th>
+                <th className="px-2 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Número</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Classificação</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Categoria</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Fase</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Condição</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Nome</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Duração</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">% Concluído</th>
+                <th className="px-4 py-6 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">% Concluído</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Status</th>
                 {(onTaskUpdate || onTaskDelete) && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Ações</th>
@@ -174,26 +195,44 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
               {tasks.map((t) => {
                 const isEditing = editingId === t.id;
                 const row = isEditing && editedTask ? editedTask : t;
-                const { text, cls } = getStatusFromPercent(row.percentualConcluido);
+
+                let text = 'Em Andamento';
+                let cls = 'bg-yellow-100 text-yellow-800';
+                const atraso = Number(row.atraso || 0);
+                if (row.percentualConcluido === 100) {
+                  text = 'Concluído';
+                  cls = 'bg-green-100 text-green-800';
+                } else if (atraso > 0) {
+                  text = 'Atrasada';
+                  cls = 'bg-red-100 text-red-800';
+                } else if (row.percentualConcluido === 0) {
+                  text = 'Não iniciado';
+                  cls = 'bg-gray-100 text-gray-800';
+                }
 
                 const pct = row.percentualConcluido;
                 const isCompleted = pct === 100;
-                // Habilita "Desfazer" somente entre 1% e 99%. Nunca para 100%.
                 const canUnstart = (pct > 0 && pct < 100) || (!!row.startDate && !isCompleted);
 
                 return (
                   <tr key={t.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
-                    {/* Início */}
                     <td className="px-4 py-3 text-sm">
                       {canUnstart ? (
-                        <button
-                          type="button"
-                          className="px-2 py-2 text-xs rounded bg-yellow-100 text-yellow-800 hover:bg-yellow-200 flex items-center gap-1"
-                          onClick={() => setPendingUnstartId(t.id)}
-                          title="Desfazer início"
-                        >
-                          <X size={14} /> Desfazer
-                        </button>
+                        <div className="flex flex-col">
+                          <button
+                            type="button"
+                            className="px-4 py-2 text-xs rounded bg-blue-200 text-blue-800 hover:bg-blue-400 flex items-center gap-1"
+                            onClick={() => setPendingUnstartId(t.id)}
+                            title="Desfazer início"
+                          >
+                            <X size={14} /> Desfazer
+                          </button>
+                          {row.startDate && (
+                            <div className="mt-1 text-[11px] text-gray-500">
+                              {formatDateTime(row.startDate)}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <button
                           type="button"
@@ -201,10 +240,9 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                           onClick={async () => {
                             if (onTaskStart) {
                               await Promise.resolve(onTaskStart(t.id));
-                              // Recarrega a visualização
-                               if (onRefresh) await Promise.resolve(onRefresh());
-                               else if (typeof window !== 'undefined') window.location.reload();
-                           }
+                              if (onRefresh) await Promise.resolve(onRefresh());
+                              else if (typeof window !== 'undefined') window.location.reload();
+                            }
                           }}
                           disabled={isCompleted || !onTaskStart}
                           title={isCompleted ? 'Tarefa concluída' : 'Iniciar tarefa'}
@@ -214,12 +252,10 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Número (não editável) */}
-                    <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-2 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {row.numero}
                     </td>
 
-                    {/* Classificação (select) */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <select
@@ -239,8 +275,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Categoria (select) */}
-                    <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-6 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <select
                           className="w-full p-1 border rounded dark:bg-gray-800 dark:border-gray-700"
@@ -259,7 +294,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Fase (select) */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <select
@@ -279,7 +313,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Condição (select) */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <select
@@ -298,7 +331,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Nome */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <input
@@ -311,7 +343,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Duração */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <input
@@ -324,7 +355,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* % Concluído */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <input
@@ -340,12 +370,17 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Status (derivado) */}
                     <td className="px-4 py-6 text-sm">
-                      <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>
+                      <div className="flex flex-col">
+                        <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>
+                        {Number(row.atraso || 0) > 0 && (
+                          <span className="mt-1 text-[11px] text-red-600">
+                            Atraso: {Number(row.atraso)} dia{Number(row.atraso) > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
-                    {/* Ações */}
                     {(onTaskUpdate || onTaskDelete) && (
                       <td className="px-4 py-6 text-sm">
                         {isEditing ? (
@@ -384,7 +419,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                                 type="button"
                                 onClick={() => {
                                   setPendingDeleteId(t.id);
-                                  setDeleteStage(2); // abre direto o modal final
+                                  setDeleteStage(2);
                                 }}
                                 className="text-red-600 hover:text-red-800"
                                 title="Excluir"
@@ -404,7 +439,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         </div>
       )}
 
-      {/* Modal para confirmar desfazer início */}
       {pendingUnstartId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setPendingUnstartId(null)} />
@@ -445,7 +479,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         </div>
       )}
 
-      {/* Confirmação: modal overlay (delete) */}
       {deleteStage === 2 && pendingDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteStage(0)} />
@@ -487,7 +520,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         </div>
       )}
 
-      {/* Espaço extra no fim da página */}
       <div className="h-12" />
     </div>
   );

@@ -15,79 +15,89 @@ interface FilterPanelProps {
 const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange }) => {
   const { t } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
-  const [developmentTypes, setDevelopmentTypes] = useState<FilterOption[]>([
-    { id: 'primary', label: 'Embalagem Primária', checked: false },
-    { id: 'secondary', label: 'Embalagem Secundária', checked: false },
+
+  // Agora representa a coluna "Classificação" da tabela
+  const [classificacaoTypes, setClassificacaoTypes] = useState<FilterOption[]>([
+    { id: 'Primária', label: 'Embalagem Primária', checked: false },
+    { id: 'Secundária', label: 'Embalagem Secundária', checked: false },
   ]);
 
   const [categories, setCategories] = useState<FilterOption[]>([
-    { id: 'blisters', label: 'Blisters', checked: false },
-    { id: 'bisnagas', label: 'Bisnagas', checked: false },
-    { id: 'cartucho', label: 'Cartucho', checked: false },
-    { id: 'frasco_plast', label: 'Frascos de Plástico', checked: false },
-    { id: 'ampoules', label: 'Ampolas', checked: false },
-    { id: 'monodoses', label: 'Monodoses', checked: false },
-    { id: 'potes_para_po', label: 'Potes para Pó', checked: false },
-    { id: 'frasco_vidro', label: 'Frascos de Vidro', checked: false },
-    { id: 'sachets', label: 'Sachets', checked: false },
+    { id: 'Blisters', label: 'Blisters', checked: false },
+    { id: 'Bisnagas', label: 'Bisnagas', checked: false },
+    { id: 'Cartucho', label: 'Cartucho', checked: false },
+    { id: 'Frascos de Plástico', label: 'Frascos de Plástico', checked: false },
+    { id: 'Ampolas', label: 'Ampolas', checked: false },
+    { id: 'Monodoses', label: 'Monodoses', checked: false },
+    { id: 'Potes para Pó', label: 'Potes para Pó', checked: false },
+    { id: 'Frascos de Vidro', label: 'Frascos de Vidro', checked: false },
+    { id: 'Sachets', label: 'Sachets', checked: false },
   ]);
 
-  // Novo filtro: Condição (A/B/C)
+  // Filtros adicionais
   const [condicao, setCondicao] = useState('');
-  const [objective, setObjective] = useState('');
+  const [objective, setObjective] = useState(''); // Fase
+  const [status, setStatus] = useState('');       // Novo filtro de Status
 
-  const toggleFilter = () => {
-    setIsOpen(!isOpen);
+  const toggleFilter = () => setIsOpen(!isOpen);
+
+  const handleClassificacaoChange = (value: string) => {
+    const updated = classificacaoTypes.map(c => ({ ...c, checked: c.id === value && value !== '' }));
+    setClassificacaoTypes(updated);
+    applyFilters(updated, categories, condicao, objective, status);
   };
 
-  const handleDevelopmentTypeChange = (id: string) => {
-    const updatedTypes = developmentTypes.map(type =>
-      type.id === id ? { ...type, checked: !type.checked } : type
-    );
-    setDevelopmentTypes(updatedTypes);
-    applyFilters(updatedTypes, categories, condicao, objective);
-  };
-
-  const handleCategoryChange = (id: string) => {
-    const updatedCategories = categories.map(category =>
-      category.id === id ? { ...category, checked: !category.checked } : category
-    );
-    setCategories(updatedCategories);
-    applyFilters(developmentTypes, updatedCategories, condicao, objective);
+  const handleCategoryChange = (value: string) => {
+    const updated = categories.map(c => ({ ...c, checked: c.id === value && value !== '' }));
+    setCategories(updated);
+    applyFilters(classificacaoTypes, updated, condicao, objective, status);
   };
 
   const handleCondicaoChange = (value: string) => {
     setCondicao(value);
-    applyFilters(developmentTypes, categories, value, objective);
+    applyFilters(classificacaoTypes, categories, value, objective, status);
   };
 
   const handleObjectiveChange = (value: string) => {
     setObjective(value);
-    applyFilters(developmentTypes, categories, condicao, value);
+    applyFilters(classificacaoTypes, categories, condicao, value, status);
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatus(value);
+    applyFilters(classificacaoTypes, categories, condicao, objective, value);
   };
 
   const applyFilters = (
-    classTypes: FilterOption[],
+    classificacoes: FilterOption[],
     cats: FilterOption[],
     cond: string,
-    obj: string
+    obj: string,
+    statusVal: string
   ) => {
     const filters: Record<string, string[]> = {};
 
-    filters.developmentType = classTypes.filter(t => t.checked).map(t => t.id);
-    filters.category = cats.filter(c => c.checked).map(c => c.id);
+    // chave 'classificacao' para filtrar a coluna Classificação
+    const cls = classificacoes.filter(c => c.checked).map(c => c.id);
+    if (cls.length) filters.classificacao = cls;
 
-    if (cond) filters.condicao = [cond]; // A/B/C
-    if (obj) filters.objective = [obj];
+    // chave 'category' permanece igual
+    const cat = cats.filter(c => c.checked).map(c => c.id);
+    if (cat.length) filters.category = cat;
+
+    if (cond) filters.condicao = [cond];   // A/B/C
+    if (obj) filters.objective = [obj];    // Fase
+    if (statusVal) filters.status = [statusVal]; // Concluídas | Em andamento | Não iniciada | Atrasadas
 
     onFilterChange(filters);
   };
 
   const clearFilters = () => {
-    setDevelopmentTypes(developmentTypes.map(t => ({ ...t, checked: false })));
+    setClassificacaoTypes(classificacaoTypes.map(t => ({ ...t, checked: false })));
     setCategories(categories.map(c => ({ ...c, checked: false })));
     setCondicao('');
     setObjective('');
+    setStatus('');
     onFilterChange({});
   };
 
@@ -109,46 +119,30 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange }) => {
       {isOpen && (
         <div className="p-4 animate-fade-in">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Development Type */}
+            {/* Classificação (antes: Tipo de Desenvolvimento) */}
             <div>
-              <h4 className="font-medium mb-2 text-gray-700">Tipo de Desenvolvimento</h4>
+              <h4 className="font-medium mb-2 text-gray-700">Classificação</h4>
               <select
                 className="w-full p-2 border border-gray-300 rounded-md"
-                value={developmentTypes.find(t => t.checked)?.id || ''}
-                onChange={e => {
-                  const selectedId = e.target.value;
-                  const updatedTypes = developmentTypes.map(type => ({
-                    ...type,
-                    checked: type.id === selectedId,
-                  }));
-                  setDevelopmentTypes(updatedTypes);
-                  applyFilters(updatedTypes, categories, condicao, objective);
-                }}
+                value={classificacaoTypes.find(t => t.checked)?.id || ''}
+                onChange={e => handleClassificacaoChange(e.target.value)}
               >
-                <option value="">Todos</option>
-                {developmentTypes.map(type => (
+                <option value="">Todas</option>
+                {classificacaoTypes.map(type => (
                   <option key={type.id} value={type.id}>{type.label}</option>
                 ))}
               </select>
             </div>
 
-            {/* Category */}
+            {/* Categoria */}
             <div>
               <h4 className="font-medium mb-2 text-gray-700">Categoria</h4>
               <select
                 className="w-full p-2 border border-gray-300 rounded-md"
                 value={categories.find(c => c.checked)?.id || ''}
-                onChange={e => {
-                  const selectedId = e.target.value;
-                  const updatedCategories = categories.map(category => ({
-                    ...category,
-                    checked: category.id === selectedId,
-                  }));
-                  setCategories(updatedCategories);
-                  applyFilters(developmentTypes, updatedCategories, condicao, objective);
-                }}
+                onChange={e => handleCategoryChange(e.target.value)}
               >
-                <option value="">Todos</option>
+                <option value="">Todas</option>
                 {categories.map(category => (
                   <option key={category.id} value={category.id}>{category.label}</option>
                 ))}
@@ -175,7 +169,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange }) => {
               </p>
             </div>
 
-            {/* Fase (Objective) */}
+            {/* Fase */}
             <div>
               <h4 className="font-medium mb-2 text-gray-700">Fase</h4>
               <select
@@ -183,13 +177,31 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange }) => {
                 value={objective}
                 onChange={(e) => handleObjectiveChange(e.target.value)}
               >
-                <option value="">Todos</option>
+                <option value="">Todas</option>
                 <option value="scope">Escopo & Briefing</option>
                 <option value="research">Pesquisa & Análise</option>
                 <option value="prototype">Protótipo</option>
                 <option value="validation">Validação de Conceito</option>
                 <option value="feasibility">Viabilidade</option>
                 <option value="implementation">Implementação</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <div>
+              <h4 className="font-medium mb-2 text-gray-700">Status</h4>
+              <select
+                className="w-full p-2 border border-gray-300 rounded-md"
+                value={status}
+                onChange={(e) => handleStatusChange(e.target.value)}
+              >
+                <option value="">Todos</option>
+                <option value="Concluídas">Concluídas</option>
+                <option value="Em andamento">Em andamento</option>
+                <option value="Não iniciada">Não iniciada</option>
+                <option value="Atrasadas">Atrasadas</option>
               </select>
             </div>
           </div>
