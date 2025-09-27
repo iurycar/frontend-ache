@@ -253,8 +253,6 @@ const Reports: React.FC = () => {
               </table>
             </div>
         </div>
-        
-        {/* A seção de relatórios de planilhas importadas foi removida */}
       </div>
     </Layout>
   );

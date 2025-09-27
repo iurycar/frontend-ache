@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { UserCircle, Lock, ArrowRight } from 'lucide-react';
+import { UserCircle, Lock, Shield } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -48,7 +48,7 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md animate-fade-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center bg-primary text-white rounded-full w-16 h-16 mb-4">
-            <ArrowRight size={32} />
+            <Shield size={32} />
           </div>
           <h1 className="text-2xl font-bold text-gray-800">Cronograma Modular</h1>
           <p className="text-gray-600">Entre com suas credenciais para acessar o sistema</p>

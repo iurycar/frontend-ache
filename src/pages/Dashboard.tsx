@@ -33,6 +33,7 @@ const Dashboard: React.FC = () => {
           addSpreadsheet({
             id: file.id,
             name: file.name,
+            project: file.project || t('imported_spreadsheets'),
             type: 'outros',
             data: [],
             importedAt: new Date(file.importedAt || Date.now()),
@@ -48,7 +49,7 @@ const Dashboard: React.FC = () => {
     if (didFetchFilesRef.current) return;
     didFetchFilesRef.current = true;
     fetchFromBackend();
-  }, [addSpreadsheet, importedSpreadsheets]);
+  }, [addSpreadsheet, importedSpreadsheets, t]);
 
   const fetchSpreadsheetTasks = async (spreadsheetId: string) => {
     if (!spreadsheetId) {
@@ -190,17 +191,27 @@ const Dashboard: React.FC = () => {
         categoria: '',
         fase: '',
         condicao: '',
-        nome: 'Nova Tarefa',
+        nome: t('new_task'),
         duracao: '',
         percentualConcluido: 0,
       } as unknown as Task,
     ]);
   };
 
+  const classificacaoOptions = useMemo(
+    () => Array.from(new Set((tasks || []).map((t) => (t.classificacao || '').trim()).filter(Boolean))).sort(),
+    [tasks]
+  );
+  const faseOptions = useMemo(
+    () => Array.from(new Set((tasks || []).map((t) => (t.fase || '').trim()).filter(Boolean))).sort(),
+    [tasks]
+  );
+
   const filteredTasks = useMemo(() => {
     const f = filters || {};
     const condSel = (f.condicao && f.condicao[0]) || '';
     const statusSel = (f.status && f.status[0]) || '';
+
     const isSempre = (cond: string) => (cond || '').toLowerCase() === 'sempre';
     const isOverdue = (t: Task): boolean => Number((t as any).atraso || 0) > 0;
 
@@ -233,16 +244,20 @@ const Dashboard: React.FC = () => {
           <option value="">-- Escolha uma planilha --</option>
           {importedSpreadsheets.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.name}
+              {s.project} | {s.name}
             </option>
           ))}
         </select>
         {importedSpreadsheets.length === 0 && (
-          <p className="text-gray-500 text-sm mt-2">Nenhuma planilha importada.</p>
+          <p className="text-gray-500 text-sm mt-2">{t('no_spreadsheets') || 'Nenhuma planilha importada.'}</p>
         )}
       </div>
 
-      <FilterPanel onFilterChange={setFilters} />
+      <FilterPanel
+        onFilterChange={setFilters}
+        classificacaoOptions={classificacaoOptions}
+        faseOptions={faseOptions}
+      />
 
       {selectedSpreadsheetId ? (
         <ScheduleTable
@@ -258,7 +273,7 @@ const Dashboard: React.FC = () => {
         />
       ) : (
         <div className="text-center text-gray-500 mt-10">
-          Selecione uma planilha para visualizar os dados.
+          {t('select_spreadsheet_to_view') || 'Selecione uma planilha para visualizar os dados.'}
         </div>
       )}
     </Layout>

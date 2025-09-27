@@ -10,7 +10,7 @@ import {
   Calendar, 
   Users, 
   FileText,
-  ChevronRight
+  ChevronRight,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -24,7 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
   
   const navItems = [
     { icon: LayoutDashboard, text: t('dashboard'), path: '/dashboard' },
-    { icon: Package, text: t('packaging_analysis'), path: '/analise-embalagens' },
+    { icon: Package, text: t('packaging_analysis'), path: '/planilhas' },
     { icon: Calendar, text: t('calendar'), path: '/calendario' },
     { icon: FileText, text: t('reports'), path: '/relatorios' },
     { icon: Users, text: t('team'), path: '/equipe' },

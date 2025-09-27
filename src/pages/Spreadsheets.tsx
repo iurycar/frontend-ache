@@ -3,12 +3,12 @@ import Layout from '../components/Layout';
 import SpreadsheetImporter from '../components/SpreadsheetImporter';
 import SpreadsheetViewer from '../components/SpreadsheetViewer';
 
-const PackagingAnalysis: React.FC = () => {
+const Spreadsheets: React.FC = () => {
   const [selectedSpreadsheetId, setSelectedSpreadsheetId] = useState<string | undefined>();
   const [reloadTrigger, setReloadTrigger] = useState(0);
   
   return (
-    <Layout title="Planilhas Importadas">
+    <Layout title="Planilhas">
       <div className="space-y-6">
         <SpreadsheetImporter onImportComplete={() => setReloadTrigger((v) => v + 1)} />
         <SpreadsheetViewer 
@@ -22,4 +22,4 @@ const PackagingAnalysis: React.FC = () => {
   );
 };
 
-export default PackagingAnalysis;
+export default Spreadsheets;

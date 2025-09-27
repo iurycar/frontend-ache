@@ -21,6 +21,7 @@ interface SpreadsheetRow {
 interface ImportedSpreadsheet {
   id: string;
   name: string;
+  project: string;
   type: 'embalagem_primaria' | 'outros';
   data: SpreadsheetRow[];
   importedAt: Date;

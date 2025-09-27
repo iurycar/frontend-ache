@@ -8,7 +8,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import PackagingAnalysis from './pages/PackagingAnalysis';
+import Spreadsheets from './pages/Spreadsheets';
 import Calendar from './pages/Calendar';
 import Reports from './pages/Reports';
 import Team from './pages/Team';
@@ -36,10 +36,10 @@ function App() {
                       }
                     />
                     <Route
-                      path="/analise-embalagens"
+                      path="/planilhas"
                       element={
                         <ProtectedRoute>
-                          <PackagingAnalysis />
+                          <Spreadsheets />
                         </ProtectedRoute>
                       }
                     />

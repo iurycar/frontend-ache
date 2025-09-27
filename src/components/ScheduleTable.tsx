@@ -70,8 +70,8 @@ function formatDateTime(iso?: string | null): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    //hour: '2-digit',
+    //minute: '2-digit',
   });
 }
 
@@ -156,7 +156,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden mt-6">
       <div className="flex justify-between items-center p-4 border-b dark:border-gray-800">
-        <h3 className="font-medium text-lg">Cronograma de Tarefas</h3>
+        <h3 className="font-medium text-lg">Lista de Tarefas</h3>
         {onTaskAdd && (
           <button
             type="button"
@@ -176,18 +176,18 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             <thead className="bg-gray-200 dark:bg-gray-800">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Início</th>
-                <th className="px-2 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Número</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Classificação</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Categoria</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Fase</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Condição</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Duração</th>
-                <th className="px-4 py-6 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">% Concluído</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Status</th>
+                <th className="px-10 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Início</th>
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Número</th>
+                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Classificação</th>
+                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Categoria</th>
+                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Fase</th>
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Condição</th>
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Nome</th>
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Duração</th>
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Concluído</th>
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Status</th>
                 {(onTaskUpdate || onTaskDelete) && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Ações</th>
+                  <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Ações</th>
                 )}
               </tr>
             </thead>
@@ -196,17 +196,17 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                 const isEditing = editingId === t.id;
                 const row = isEditing && editedTask ? editedTask : t;
 
-                let text = 'Em Andamento';
+                let text = 'Andamento';
                 let cls = 'bg-yellow-100 text-yellow-800';
                 const atraso = Number(row.atraso || 0);
                 if (row.percentualConcluido === 100) {
-                  text = 'Concluído';
+                  text = 'Concluída';
                   cls = 'bg-green-100 text-green-800';
                 } else if (atraso > 0) {
                   text = 'Atrasada';
                   cls = 'bg-red-100 text-red-800';
                 } else if (row.percentualConcluido === 0) {
-                  text = 'Não iniciado';
+                  text = 'Não iniciada';
                   cls = 'bg-gray-100 text-gray-800';
                 }
 
@@ -221,15 +221,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                         <div className="flex flex-col">
                           <button
                             type="button"
-                            className="px-4 py-2 text-xs rounded bg-blue-200 text-blue-800 hover:bg-blue-400 flex items-center gap-1"
+                            className="px-2 py-2 text-xs rounded bg-blue-200 text-blue-800 hover:bg-blue-400 flex items-center gap-1"
                             onClick={() => setPendingUnstartId(t.id)}
                             title="Desfazer início"
                           >
                             <X size={14} /> Desfazer
                           </button>
                           {row.startDate && (
-                            <div className="mt-1 text-[11px] text-gray-500">
-                              {formatDateTime(row.startDate)}
+                            <div className="mt-1 text-[11px] text-gray-500 text-center flex justify-center">
+                            Em: {formatDateTime(row.startDate)}
                             </div>
                           )}
                         </div>
@@ -256,7 +256,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       {row.numero}
                     </td>
 
-                    <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {isEditing ? (
                         <select
                           className="w-full p-1 border rounded dark:bg-gray-800 dark:border-gray-700"
@@ -275,7 +275,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    <td className="px-6 py-6 text-sm text-gray-900 dark:text-gray-100">
+                    <td className="px-6 py-6 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                       {isEditing ? (
                         <select
                           className="w-full p-1 border rounded dark:bg-gray-800 dark:border-gray-700"
@@ -370,8 +370,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    <td className="px-4 py-6 text-sm">
-                      <div className="flex flex-col">
+                    <td className="px-2 py-1 text-sm text-center whitespace-nowrap">
+                      <div className="flex flex-col items-center">
                         <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>
                         {Number(row.atraso || 0) > 0 && (
                           <span className="mt-1 text-[11px] text-red-600">
@@ -443,11 +443,11 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setPendingUnstartId(null)} />
           <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
-            <h4 className="text-lg font-semibold text-yellow-700 dark:text-yellow-400">
-              Cancelar tarefa iniciada
+            <h4 className="text-lg font-semibold text-red-700 dark:text-red-400">
+              Cancelar tarefa iniciada?
             </h4>
             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              Confirma cancelar a tarefa? O progresso será perdido.
+              Tem certeza que deseja cancelar a tarefa? O progresso será perdido.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
