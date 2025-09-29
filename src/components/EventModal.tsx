@@ -10,6 +10,11 @@ interface Event {
   participants?: string[];
   location?: string;
   description?: string;
+  // Campos para Gantt
+  duration?: number; // duração em dias
+  progress?: number; // progresso de 0 a 100
+  dependencies?: string[]; // IDs dos eventos dos quais depende
+  priority?: 'low' | 'medium' | 'high';
 }
 
 interface EventModalProps {
@@ -34,7 +39,11 @@ const EventModal: React.FC<EventModalProps> = ({
     type: 'meeting' as Event['type'],
     participants: '',
     location: '',
-    description: ''
+    description: '',
+    duration: 1,
+    progress: 0,
+    dependencies: '',
+    priority: 'medium' as Event['priority']
   });
 
   useEffect(() => {
@@ -46,7 +55,11 @@ const EventModal: React.FC<EventModalProps> = ({
         type: event.type,
         participants: event.participants?.join(', ') || '',
         location: event.location || '',
-        description: event.description || ''
+        description: event.description || '',
+        duration: event.duration || 1,
+        progress: event.progress || 0,
+        dependencies: event.dependencies?.join(', ') || '',
+        priority: event.priority || 'medium'
       });
     } else if (selectedDate) {
       setFormData(prev => ({
@@ -56,8 +69,22 @@ const EventModal: React.FC<EventModalProps> = ({
     }
   }, [event, selectedDate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Adicionar listener para tecla ESC
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen]);
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     
     const newEvent: Omit<Event, 'id'> = {
       title: formData.title,
@@ -66,7 +93,11 @@ const EventModal: React.FC<EventModalProps> = ({
       type: formData.type,
       participants: formData.participants ? formData.participants.split(',').map(p => p.trim()) : undefined,
       location: formData.location || undefined,
-      description: formData.description || undefined
+      description: formData.description || undefined,
+      duration: formData.duration,
+      progress: formData.progress,
+      dependencies: formData.dependencies ? formData.dependencies.split(',').map(d => d.trim()) : undefined,
+      priority: formData.priority
     };
 
     onSave(newEvent);
@@ -81,7 +112,11 @@ const EventModal: React.FC<EventModalProps> = ({
       type: 'meeting',
       participants: '',
       location: '',
-      description: ''
+      description: '',
+      duration: 1,
+      progress: 0,
+      dependencies: '',
+      priority: 'medium'
     });
     onClose();
   };
@@ -89,21 +124,23 @@ const EventModal: React.FC<EventModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
             {event ? 'Editar Evento' : 'Novo Evento'}
           </h2>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+            title="Fechar (ESC)"
           >
             <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-gray-100 dark:scrollbar-track-gray-800">
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Título */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -221,23 +258,95 @@ const EventModal: React.FC<EventModalProps> = ({
             </div>
           </div>
 
-          {/* Botões */}
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
-            >
-              {event ? 'Atualizar' : 'Criar'} Evento
-            </button>
+          {/* Campos do Gantt */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+              Configurações do Gantt
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* Duração */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Duração (dias)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.duration}
+                  onChange={(e) => setFormData(prev => ({ ...prev, duration: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  required
+                />
+              </div>
+
+              {/* Progresso */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Progresso (%)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={formData.progress}
+                  onChange={(e) => setFormData(prev => ({ ...prev, progress: parseInt(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* Prioridade */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Prioridade
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value as Event['priority'] }))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+              </select>
+            </div>
+
+            {/* Dependências */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Dependências (IDs dos eventos)
+              </label>
+              <input
+                type="text"
+                value={formData.dependencies}
+                onChange={(e) => setFormData(prev => ({ ...prev, dependencies: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="ID1, ID2, ID3"
+              />
+            </div>
           </div>
-        </form>
+
+          </form>
+        </div>
+
+        {/* Botões fixos na parte inferior */}
+        <div className="flex justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 flex-shrink-0">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="px-6 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors font-medium"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="px-6 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors font-medium shadow-sm"
+          >
+            {event ? 'Atualizar' : 'Criar'} Evento
+          </button>
+        </div>
       </div>
     </div>
   );

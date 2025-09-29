@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Layout from '../components/Layout';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Clock, Users, MapPin, Edit2, Trash2 } from 'lucide-react';
 import EventModal from '../components/EventModal';
+import GanttChart from '../components/GanttChart';
 
 interface Event {
   id: string;
@@ -12,6 +13,11 @@ interface Event {
   participants?: string[];
   location?: string;
   description?: string;
+  // Campos para Gantt
+  duration?: number; // duração em dias
+  progress?: number; // progresso de 0 a 100
+  dependencies?: string[]; // IDs dos eventos dos quais depende
+  priority?: 'low' | 'medium' | 'high';
 }
 
 const Calendar: React.FC = () => {
@@ -19,6 +25,7 @@ const Calendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [viewMode, setViewMode] = useState<'calendar' | 'gantt'>('gantt');
   const [events, setEvents] = useState<Event[]>([
     {
       id: '1',
@@ -28,25 +35,48 @@ const Calendar: React.FC = () => {
       type: 'meeting',
       participants: ['João Silva', 'Maria Santos'],
       location: 'Sala de Reuniões A',
-      description: 'Definição dos requisitos iniciais do projeto'
+      description: 'Definição dos requisitos iniciais do projeto',
+      duration: 1,
+      progress: 100,
+      priority: 'high'
     },
     {
       id: '2',
+      title: 'Desenvolvimento do Protótipo',
+      date: new Date(2024, 5, 16),
+      time: '09:00',
+      type: 'other',
+      description: 'Desenvolvimento do protótipo inicial',
+      duration: 5,
+      progress: 60,
+      dependencies: ['1'],
+      priority: 'high'
+    },
+    {
+      id: '3',
       title: 'Entrega do Protótipo',
       date: new Date(2024, 5, 20),
       time: '17:00',
       type: 'deadline',
-      description: 'Prazo final para entrega do protótipo inicial'
+      description: 'Prazo final para entrega do protótipo inicial',
+      duration: 1,
+      progress: 0,
+      dependencies: ['2'],
+      priority: 'high'
     },
     {
-      id: '3',
+      id: '4',
       title: 'Revisão de Qualidade',
-      date: new Date(2024, 5, 25),
+      date: new Date(2024, 5, 21),
       time: '14:00',
       type: 'review',
       participants: ['Equipe de QA'],
       location: 'Laboratório',
-      description: 'Análise de qualidade dos materiais'
+      description: 'Análise de qualidade dos materiais',
+      duration: 3,
+      progress: 0,
+      dependencies: ['3'],
+      priority: 'medium'
     }
   ]);
 
@@ -146,95 +176,153 @@ const Calendar: React.FC = () => {
     }
   };
 
+  const handleGanttNavigate = (direction: 'prev' | 'next') => {
+    navigateMonth(direction);
+  };
+
+  const handleGanttZoom = (direction: 'in' | 'out') => {
+    // Implementar lógica de zoom se necessário
+    console.log('Zoom:', direction);
+  };
+
+  const handleGanttEventClick = (event: Event) => {
+    setEditingEvent(event);
+    setShowEventModal(true);
+  };
+
   const days = getDaysInMonth(currentDate);
   const selectedDateEvents = getEventsForDate(selectedDate);
 
   return (
     <Layout title="Calendário">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Calendar Grid */}
-        <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold flex items-center text-gray-900 dark:text-white">
-                <CalendarIcon className="text-primary mr-2" size={24} />
-                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => navigateMonth('prev')}
-                  className="p-2 hover:bg-gray-100 rounded-full"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <button
-                  onClick={() => setCurrentDate(new Date())}
-                  className="px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-opacity-90"
-                >
-                  Hoje
-                </button>
-                <button
-                  onClick={() => navigateMonth('next')}
-                  className="p-2 hover:bg-gray-100 rounded-full"
-                >
-                  <ChevronRight size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* Calendar Header */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {weekDays.map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar Days */}
-            <div className="grid grid-cols-7 gap-1">
-              {days.map((day, index) => {
-                const dayEvents = day ? getEventsForDate(day) : [];
-                const isSelected = selectedDate && day && selectedDate.toDateString() === day.toDateString();
-                const isToday = day && day.toDateString() === new Date().toDateString();
-
-                return (
-                  <div
-                    key={index}
-                    className={`min-h-[80px] p-1 border border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                      isSelected ? 'bg-primary bg-opacity-10 border-primary' : ''
-                    } ${isToday ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
-                    onClick={() => day && setSelectedDate(day)}
-                  >
-                    {day && (
-                      <>
-                        <div className={`text-sm font-medium mb-1 ${
-                          isToday ? 'text-blue-600' : 'text-gray-900 dark:text-white'
-                        }`}>
-                          {day.getDate()}
-                        </div>
-                        <div className="space-y-1">
-                          {dayEvents.slice(0, 2).map(event => (
-                            <div
-                              key={event.id}
-                              className={`text-xs p-1 rounded truncate ${getEventTypeColor(event.type)}`}
-                            >
-                              {event.title}
-                            </div>
-                          ))}
-                          {dayEvents.length > 2 && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              +{dayEvents.length - 2} mais
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+      {/* View Mode Toggle */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {viewMode === 'gantt' ? 'Gráfico de Gantt' : 'Calendário'}
+            </h1>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`px-4 py-2 text-sm rounded-md ${
+                  viewMode === 'calendar' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <CalendarIcon size={16} className="mr-2 inline" />
+                Calendário
+              </button>
+              <button
+                onClick={() => setViewMode('gantt')}
+                className={`px-4 py-2 text-sm rounded-md ${
+                  viewMode === 'gantt' 
+                    ? 'bg-primary text-white' 
+                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                }`}
+              >
+                Gráfico de Gantt
+              </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Content */}
+        <div className="lg:col-span-2">
+          {viewMode === 'gantt' ? (
+            <GanttChart
+              events={events}
+              currentDate={currentDate}
+              onNavigate={handleGanttNavigate}
+              onZoom={handleGanttZoom}
+              onEventClick={handleGanttEventClick}
+            />
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold flex items-center text-gray-900 dark:text-white">
+                  <CalendarIcon className="text-primary mr-2" size={24} />
+                  {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                </h2>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => navigateMonth('prev')}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentDate(new Date())}
+                    className="px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-opacity-90"
+                  >
+                    Hoje
+                  </button>
+                  <button
+                    onClick={() => navigateMonth('next')}
+                    className="p-2 hover:bg-gray-100 rounded-full"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Calendar Header */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {weekDays.map(day => (
+                  <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Calendar Days */}
+              <div className="grid grid-cols-7 gap-1">
+                {days.map((day, index) => {
+                  const dayEvents = day ? getEventsForDate(day) : [];
+                  const isSelected = selectedDate && day && selectedDate.toDateString() === day.toDateString();
+                  const isToday = day && day.toDateString() === new Date().toDateString();
+
+                  return (
+                    <div
+                      key={index}
+                      className={`min-h-[80px] p-1 border border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                        isSelected ? 'bg-primary bg-opacity-10 border-primary' : ''
+                      } ${isToday ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                      onClick={() => day && setSelectedDate(day)}
+                    >
+                      {day && (
+                        <>
+                          <div className={`text-sm font-medium mb-1 ${
+                            isToday ? 'text-blue-600' : 'text-gray-900 dark:text-white'
+                          }`}>
+                            {day.getDate()}
+                          </div>
+                          <div className="space-y-1">
+                            {dayEvents.slice(0, 2).map(event => (
+                              <div
+                                key={event.id}
+                                className={`text-xs p-1 rounded truncate ${getEventTypeColor(event.type)}`}
+                              >
+                                {event.title}
+                              </div>
+                            ))}
+                            {dayEvents.length > 2 && (
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                +{dayEvents.length - 2} mais
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Event Details Sidebar */}
@@ -349,7 +437,7 @@ const Calendar: React.FC = () => {
         isOpen={showEventModal}
         onClose={() => setShowEventModal(false)}
         onSave={handleSaveEvent}
-        selectedDate={selectedDate}
+        selectedDate={selectedDate || undefined}
         event={editingEvent}
       />
     </Layout>
