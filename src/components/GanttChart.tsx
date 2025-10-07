@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface Event {
@@ -59,6 +59,36 @@ const GanttChart: React.FC<GanttChartProps> = ({
         return 'border-l-4 border-gray-500';
     }
   };
+
+  const getColumnWidth = () => {
+    // Aumentamos a largura na visão de semana para dar mais espaço
+    const width = viewMode === 'week' ? 80 : 40;
+    return width;
+  };
+
+  // ✅ 1. Geração da linha do tempo agora é dinâmica e memoizada
+  const timeline = useMemo(() => {
+    const days = [];
+    let startDate = new Date(currentDate);
+    let endDate = new Date(currentDate);
+
+    if (viewMode === 'week') {
+      // Para a visão de semana, mostramos 14 dias
+      startDate.setDate(currentDate.getDate() - 7);
+      endDate.setDate(currentDate.getDate() + 7);
+    } else {
+      // Para a visão de mês, mostramos o mês inteiro
+      startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    }
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      days.push(new Date(d));
+    }
+
+    return days;
+  }, [currentDate, viewMode]);
+
 
   const calculateEventPosition = (event: Event) => {
     const startDate = event.date;
