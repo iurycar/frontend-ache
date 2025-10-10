@@ -6,13 +6,58 @@ interface SpreadsheetDetailViewProps {
   onBack: () => void;
 }
 
+type BackendRow = Record<string, unknown>;
+
+const columns: { key: keyof BackendRow; label: string }[] = [
+  { key: 'num', label: 'Número' },
+  { key: 'classe', label: 'Classificação' },
+  { key: 'category', label: 'Categoria' },
+  { key: 'phase', label: 'Fase' },
+  { key: 'status', label: 'Condição' },
+  { key: 'name', label: 'Nome' },
+  { key: 'duration', label: 'Duração' },
+  { key: 'text', label: 'Como fazer' },
+  { key: 'reference', label: 'Doc. Referência' },
+  { key: 'conclusion', label: '% Conclusão' },
+  { key: 'start_date', label: 'Iniciado em' },
+  { key: 'end_date', label: 'Finalizado em' },
+  { key: 'responsible', label: 'Responsável' },
+];
+
+const formatDate = (value?: unknown) => {
+  if (!value) return '';
+  const d = new Date(String(value));
+  if (isNaN(d.getTime())) return String(value);
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(d);
+};
+
+const formatCell = (key: string, value: unknown) => {
+  if (value === null || value === undefined) return '';
+  switch (key) {
+    case 'start_date':
+    case 'end_date':
+      return formatDate(value);
+    case 'conclusion': {
+      if (typeof value === 'number') return `${(value * 100).toFixed(0)}%`; // Multiplica por 100
+      const parsed = parseFloat(String(value).replace(',', '.'));
+      return isNaN(parsed) ? String(value) : `${(parsed * 100).toFixed(0)}%`; // Multiplica por 100
+    }
+    default:
+      return String(value);
+  }
+};
+
 const SpreadsheetDetailView: React.FC<SpreadsheetDetailViewProps> = ({ 
   spreadsheetId, 
   onBack 
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<Record<string, unknown>[]>([]);
+  const [data, setData] = useState<BackendRow[]>([]);
   const [fileName, setFileName] = useState('');
 
   useEffect(() => {
@@ -29,7 +74,7 @@ const SpreadsheetDetailView: React.FC<SpreadsheetDetailViewProps> = ({
         }
         
         const result = await response.json();
-        setData(result.dados || []);
+        setData((result.dados as BackendRow[]) || []);
         setFileName(result.nome || 'Planilha');
       } catch (error) {
         console.error('Erro ao buscar dados:', error);
@@ -95,12 +140,12 @@ const SpreadsheetDetailView: React.FC<SpreadsheetDetailViewProps> = ({
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
                 <tr>
-                  {Object.keys(data[0]).map((key) => (
+                  {columns.map(col => (
                     <th
-                      key={key}
+                      key={String(col.key)}
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
                     >
-                      {key}
+                      {col.label}
                     </th>
                   ))}
                 </tr>
@@ -108,12 +153,12 @@ const SpreadsheetDetailView: React.FC<SpreadsheetDetailViewProps> = ({
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {data.map((row, index) => (
                   <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    {Object.values(row).map((value, cellIndex) => (
+                    {columns.map(col => (
                       <td
-                        key={cellIndex}
+                        key={String(col.key)}
                         className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white"
                       >
-                        {String(value)}
+                        {formatCell(String(col.key), row[col.key])}
                       </td>
                     ))}
                   </tr>

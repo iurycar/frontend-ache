@@ -167,7 +167,6 @@ const SpreadsheetImporter: React.FC<SpreadsheetImporterProps> = ({ onImportCompl
         )}
       </div>
       
-      {/* A seção de formato esperado foi mantida, pois ainda é útil para o usuário */}
       <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
          <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Formato Esperado:</h4>
          <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">

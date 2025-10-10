@@ -1,8 +1,10 @@
-# Projeto Aché - Cronograma Modular
+# Frontend Aché: Sistema de Cronogramas Modulares e Chatbot
 
-## Visão Geral
+## Introdução
 
-Esses são os arquivos utilizados para o desenvolvimento do Frontend do projeto de gerenciamento de Cronogramas Modulares, proposto no Challenge FIAP 2025, em colaboração com Aché. O projeto conta com integração com planilhas Excel, um chatbot inteligente chamada Melora, suporte a múltiplos idiomas e modo escuro.
+Este projeto apresenta o frontend desenvolvido para para otimizar a gestão de projetos e a organização de cronogramas. Criada para o **Challenge FIAP 2025, em colaboração com a Aché**. 
+
+Esses são os arquivos utilizados para o desenvolvimento do Frontend do projeto de gerenciamento de Cronogramas Modulares. O projeto conta com integração com planilhas Excel, um chatbot inteligente chamada Melora, suporte a múltiplos idiomas e modo escuro.
 
 ## Funcionalidades Principais
 
