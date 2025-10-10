@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface Event {
@@ -60,39 +60,59 @@ const GanttChart: React.FC<GanttChartProps> = ({
     }
   };
 
-  const calculateEventPosition = (event: Event) => {
-    const startDate = event.date;
-    const duration = event.duration || 1;
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + duration - 1);
-
-    // Calcular posição baseada na data atual e modo de visualização
-    const daysDiff = Math.floor((startDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
-    const width = duration * (viewMode === 'week' ? 100 : 30) * zoomLevel;
-
-    return {
-      left: Math.max(0, daysDiff * (viewMode === 'week' ? 100 : 30) * zoomLevel),
-      width: Math.max(50, width),
-      endDate
-    };
+  const getColumnWidth = () => {
+    // Aumentamos a largura na visão de semana para dar mais espaço
+    const width = viewMode === 'week' ? 80 : 40;
+    return width;
   };
 
-  const generateTimeLine = () => {
+  // ✅ 1. Geração da linha do tempo agora é dinâmica e memoizada
+  const timeline = useMemo(() => {
     const days = [];
-    const startDate = new Date(currentDate);
-    startDate.setDate(startDate.getDate() - 7); // Mostrar 7 dias antes da data atual
-    
-    const endDate = new Date(currentDate);
-    endDate.setDate(endDate.getDate() + 30); // Mostrar 30 dias depois da data atual
+    let startDate = new Date(currentDate);
+    let endDate = new Date(currentDate);
+
+    if (viewMode === 'week') {
+      // Para a visão de semana, mostramos 14 dias
+      startDate.setDate(currentDate.getDate() - 7);
+      endDate.setDate(currentDate.getDate() + 7);
+    } else {
+      // Para a visão de mês, mostramos o mês inteiro
+      startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    }
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       days.push(new Date(d));
     }
 
     return days;
-  };
+  }, [currentDate, viewMode]);
 
-  const timeline = generateTimeLine();
+
+  const calculateEventPosition = (event: Event) => {
+    // ✅ 2. O início da linha do tempo agora é o primeiro dia do array 'timeline'
+    const timelineStart = timeline[0]; 
+    if (!timelineStart) return { left: 0, width: 0, endDate: event.date };
+
+    const startDate = event.date;
+    const duration = event.duration || 1;
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + duration - 1);
+
+    const daysDiff = Math.floor((startDate.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const columnWidth = getColumnWidth();
+    
+    // O posicionamento e a largura agora usam a largura da coluna correta
+    const leftPosition = daysDiff * columnWidth * zoomLevel;
+    const width = duration * columnWidth * zoomLevel;
+
+    return {
+      left: Math.max(0, leftPosition),
+      width: Math.max(20, width), // Garante uma largura mínima
+      endDate
+    };
+  };
 
   const handleZoom = (direction: 'in' | 'out') => {
     const newZoom = direction === 'in' ? zoomLevel * 1.2 : zoomLevel / 1.2;
@@ -165,26 +185,27 @@ const GanttChart: React.FC<GanttChartProps> = ({
       <div className="overflow-x-auto">
         <div className="min-w-max">
           <div className="flex border-b border-gray-200 dark:border-gray-700">
-            <div className="w-64 p-3 font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700">
+            <div className="w-64 p-3 font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
               Tarefa
             </div>
             <div className="flex-1 min-w-[800px]">
               <div className="flex">
                 {timeline.map((day, index) => {
                   const isToday = day.toDateString() === new Date().toDateString();
-                  const isCurrentMonth = day.getMonth() === currentDate.getMonth();
                   
                   return (
                     <div
                       key={index}
-                      className={`flex-1 p-2 text-center text-sm border-r border-gray-200 dark:border-gray-700 ${
+                      className={`p-2 text-center text-sm border-r border-gray-200 dark:border-gray-700 ${
                         isToday 
                           ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' 
-                          : isCurrentMonth 
-                            ? 'text-gray-900 dark:text-white' 
-                            : 'text-gray-500 dark:text-gray-400'
+                          : 'text-gray-900 dark:text-white'
                       }`}
-                      style={{ minWidth: `${30 * zoomLevel}px` }}
+                      style={{ 
+                        minWidth: `${getColumnWidth() * zoomLevel}px`,
+                        width: `${getColumnWidth() * zoomLevel}px`,
+                        flexShrink: 0
+                      }}
                     >
                       <div className="font-medium">{day.getDate()}</div>
                       <div className="text-xs">
@@ -199,7 +220,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
 
           {/* Events Rows */}
           <div className="space-y-1">
-            {events.map((event, index) => {
+            {events.map((event) => {
               const position = calculateEventPosition(event);
               const progress = event.progress || 0;
               
@@ -209,7 +230,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                   className="flex border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   {/* Task Name */}
-                  <div className="w-64 p-3 border-r border-gray-200 dark:border-gray-700">
+                  <div className="w-64 p-3 border-r border-gray-200 dark:border-gray-700 flex-shrink-0">
                     <div className="flex items-center space-x-2">
                       <div className={`w-3 h-3 rounded-full ${getEventTypeColor(event.type)}`}></div>
                       <div className="flex-1">
@@ -224,40 +245,26 @@ const GanttChart: React.FC<GanttChartProps> = ({
                   </div>
 
                   {/* Gantt Bar */}
-                  <div className="flex-1 min-w-[800px] relative p-2">
-                    <div className="relative h-8">
-                      {/* Background bar */}
+                  <div className="flex-1 min-w-[800px] relative">
+                    <div className="relative h-full flex items-center">
+                       {/* Main bar with progress */}
                       <div
-                        className={`absolute top-1/2 transform -translate-y-1/2 rounded ${getEventTypeColor(event.type)} opacity-20`}
+                        className={`absolute rounded cursor-pointer hover:opacity-80 transition-opacity ${getPriorityColor(event.priority)}`}
                         style={{
                           left: `${position.left}px`,
                           width: `${position.width}px`,
-                          height: '24px'
-                        }}
-                      ></div>
-                      
-                      {/* Progress bar */}
-                      <div
-                        className={`absolute top-1/2 transform -translate-y-1/2 rounded-l ${getEventTypeColor(event.type)}`}
-                        style={{
-                          left: `${position.left}px`,
-                          width: `${(position.width * progress) / 100}px`,
-                          height: '24px'
-                        }}
-                      ></div>
-                      
-                      {/* Main bar */}
-                      <div
-                        className={`absolute top-1/2 transform -translate-y-1/2 rounded cursor-pointer hover:opacity-80 transition-opacity ${getEventTypeColor(event.type)} ${getPriorityColor(event.priority)}`}
-                        style={{
-                          left: `${position.left}px`,
-                          width: `${position.width}px`,
-                          height: '24px'
+                          height: '24px',
+                          background: `linear-gradient(to right, ${getComputedStyle(document.documentElement).getPropertyValue('--' + event.type + '-color') || '#4A90E2'} ${progress}%, #e0e0e0 ${progress}%)`
                         }}
                         onClick={() => onEventClick(event)}
                       >
-                        <div className="flex items-center justify-center h-full text-white text-xs font-medium">
-                          {progress > 0 && `${progress}%`}
+                        <div
+                            className={`h-full rounded-l ${getEventTypeColor(event.type)}`}
+                            style={{ width: `${progress}%` }}
+                        >
+                            <div className="flex items-center justify-center h-full text-white text-xs font-medium px-2 truncate">
+                                {progress > 0 && `${progress}%`}
+                            </div>
                         </div>
                       </div>
                     </div>
