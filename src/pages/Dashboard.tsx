@@ -66,6 +66,7 @@ const Dashboard: React.FC = () => {
       if (!res.ok) throw new Error('Falha ao buscar dados da planilha');
       const result = await res.json();
       const dados: any[] = result.dados || [];
+
       const mapped: Task[] = dados.map((row: any, idx: number) => {
         const pctRaw = row?.conclusion;
         let pct = 0;
@@ -88,8 +89,11 @@ const Dashboard: React.FC = () => {
           startDate: row?.start_date ?? null,
           endDate: row?.end_date ?? null,
           atraso: Number(row?.atraso ?? 0),
+          // Valor cru ('' quando não definido); exibição é tratada no componente
+          responsavel: String(row?.responsavel ?? row?.responsible ?? '').trim() || '',
         };
       });
+
       setTasks(mapped);
     } catch {
       setTasksError('Erro ao carregar dados da planilha.');
@@ -106,8 +110,11 @@ const Dashboard: React.FC = () => {
   const handleTaskStart = async (id: string) => {
     if (!selectedSpreadsheetId) return;
     try {
+      const task = tasks.find((t) => t.id === id);
+      const num = Number(task?.numero);
+      if (!Number.isFinite(num)) throw new Error('Número de linha inválido');
       const res = await fetch(
-        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/start/${encodeURIComponent(id)}`,
+        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/start/${num}`,
         { method: 'POST', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao iniciar tarefa');
@@ -117,24 +124,12 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleTaskUnstart = async (id: string) => {
-    if (!selectedSpreadsheetId) return;
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/start/${encodeURIComponent(id)}`,
-        { method: 'DELETE', credentials: 'include' }
-      );
-      if (!res.ok) throw new Error('Falha ao desfazer início');
-      await fetchSpreadsheetTasks(selectedSpreadsheetId);
-    } catch {
-      alert('Não foi possível desfazer o início da tarefa.');
-    }
-  };
-
   const handleTaskUpdate = async (updated: Task) => {
     try {
-      const payload = {
-        num: Number(updated.numero),
+      const linhaNumRaw = Number(updated.numero);
+      const isNew = !Number.isFinite(linhaNumRaw) || linhaNumRaw < 1;
+
+      const payloadBase = {
         classe: updated.classificacao,
         category: updated.categoria,
         phase: updated.fase,
@@ -144,17 +139,21 @@ const Dashboard: React.FC = () => {
         conclusion: Number.isFinite(updated.percentualConcluido)
           ? Number(updated.percentualConcluido) / 100
           : 0,
+        // Garante envio do campo (string vazia quando não definido)
+        responsible: (updated.responsavel ?? '').toString().trim(),
       };
+      const payload = isNew ? payloadBase : { ...payloadBase, num: linhaNumRaw };
 
-      const res = await fetch(
-        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${encodeURIComponent(updated.id)}`,
-        {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(payload),
-        }
-      );
+      const url = isNew
+        ? `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/0`
+        : `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${linhaNumRaw}`;
+
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
       if (!res.ok) throw new Error('Falha ao salvar tarefa');
       await fetchSpreadsheetTasks(selectedSpreadsheetId);
     } catch {
@@ -168,8 +167,11 @@ const Dashboard: React.FC = () => {
       return;
     }
     try {
+      const task = tasks.find((t) => t.id === id);
+      const num = Number(task?.numero);
+      if (!Number.isFinite(num)) throw new Error('Número de linha inválido');
       const res = await fetch(
-        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${encodeURIComponent(id)}`,
+        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${num}`,
         { method: 'DELETE', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao excluir a tarefa.');
@@ -186,7 +188,7 @@ const Dashboard: React.FC = () => {
       ...prev,
       {
         id: newId,
-        numero: String(prev.length + 1),
+        numero: '0',
         classificacao: '',
         categoria: '',
         fase: '',
@@ -242,9 +244,9 @@ const Dashboard: React.FC = () => {
           onChange={(e) => setSelectedSpreadsheetId(e.target.value)}
         >
           <option value="">-- Escolha uma planilha --</option>
-          {importedSpreadsheets.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.project} | {s.name}
+          {importedSpreadsheets.map((sheet) => (
+            <option key={sheet.id} value={sheet.id}>
+              {sheet.project} | {sheet.name}
             </option>
           ))}
         </select>
@@ -269,11 +271,10 @@ const Dashboard: React.FC = () => {
           onTaskDelete={handleTaskDelete}
           onTaskAdd={handleTaskAdd}
           onTaskStart={handleTaskStart}
-          onTaskUnstart={handleTaskUnstart}
         />
       ) : (
         <div className="text-center text-gray-500 mt-10">
-          {t('select_spreadsheet_to_view') || 'Selecione uma planilha para visualizar os dados.'}
+          {t('Selecione uma planilha para visualizar os dados.')}
         </div>
       )}
     </Layout>

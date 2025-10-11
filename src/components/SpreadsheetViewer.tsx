@@ -182,7 +182,6 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                   {/* ===== CORREÇÃO PRINCIPAL ===== */}
                    <button
                      onClick={() => onSpreadsheetSelect && onSpreadsheetSelect(file.id)}
                      className="p-2 text-gray-400 hover:text-primary dark:text-gray-500 dark:hover:text-primary transition-colors"

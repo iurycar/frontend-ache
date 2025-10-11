@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Edit2, Trash2, Save, X, Plus, Play } from 'lucide-react';
 
 export interface Task {
@@ -14,6 +14,7 @@ export interface Task {
   startDate?: string | null;
   endDate?: string | null;
   atraso?: number;
+  responsavel?: string | null;
 }
 
 interface ScheduleTableProps {
@@ -25,11 +26,12 @@ interface ScheduleTableProps {
   onTaskDelete?: (id: string) => void | Promise<void>;
   onTaskAdd?: () => void;
   onTaskStart?: (id: string) => void | Promise<void>;
-  onTaskUnstart?: (id: string) => void | Promise<void>;
   classificacaoOptions?: string[];
   categoriaOptions?: string[];
   faseOptions?: string[];
 }
+
+type Employee = { id: string; name: string };
 
 function uniqueNonEmpty(values: (string | undefined | null)[]): string[] {
   const seen = new Set<string>();
@@ -58,7 +60,7 @@ function parseDateSafe(iso?: string | null): Date | null {
   if (m) {
     const [, Y, M, D, h, mi, sec] = m;
     return new Date(Number(Y), Number(M) - 1, Number(D), Number(h), Number(mi), Number(sec || '0'));
-    }
+  }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -70,9 +72,23 @@ function formatDateTime(iso?: string | null): string {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
-    //hour: '2-digit',
-    //minute: '2-digit',
   });
+}
+
+// Valor cru do responsável ('' quando não definido)
+function getResponsibleRaw(t: any): string {
+  return String(t?.responsavel ?? t?.responsible ?? '').trim();
+}
+// Texto para exibição (fallback “Não definido”)
+function displayResponsible(t: any): string {
+  const raw = getResponsibleRaw(t);
+  return raw || 'Não definido';
+}
+// Pode editar? Somente se vazio ou “Não definido”
+function canEditResponsible(t: any): boolean {
+  const raw = getResponsibleRaw(t);
+  if (!raw) return true;
+  return raw.toLowerCase() === 'não definido';
 }
 
 const ScheduleTable: React.FC<ScheduleTableProps> = ({
@@ -84,7 +100,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   onTaskDelete,
   onTaskAdd,
   onTaskStart,
-  onTaskUnstart,
   classificacaoOptions,
   categoriaOptions,
   faseOptions,
@@ -93,7 +108,31 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteStage, setDeleteStage] = useState<0 | 2>(0);
-  const [pendingUnstartId, setPendingUnstartId] = useState<string | null>(null);
+  const [confirmStartId, setConfirmStartId] = useState<string | null>(null);
+
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        setLoadingEmployees(true);
+        const res = await fetch('http://127.0.0.1:5000/team/employees', {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('Falha ao carregar usuários da equipe');
+        const data = await res.json();
+        setEmployees(Array.isArray(data.employees) ? data.employees : []);
+      } catch (e) {
+        console.error(e);
+        setEmployees([]);
+      } finally {
+        setLoadingEmployees(false);
+      }
+    };
+    fetchEmployees();
+  }, []);
 
   const classificacaoOpts = useMemo(
     () => classificacaoOptions ?? uniqueNonEmpty(tasks.map((t) => t.classificacao)),
@@ -108,9 +147,29 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     [faseOptions, tasks]
   );
 
+  const handleConfirmStart = async () => {
+    if (confirmStartId && onTaskStart) {
+      try {
+        await Promise.resolve(onTaskStart(confirmStartId));
+        if (onRefresh) await Promise.resolve(onRefresh());
+        else if (typeof window !== 'undefined') window.location.reload();
+      } catch (e) {
+        console.error('Erro ao iniciar tarefa:', e);
+      } finally {
+        setConfirmStartId(null);
+      }
+    }
+  };
+
+  const handleCancelStart = () => {
+    setConfirmStartId(null);
+  };
+
   const startEdit = (task: Task) => {
+    // Usa valor cru para edição ('' quando indefinido)
+    const respRaw = getResponsibleRaw(task);
     setEditingId(task.id);
-    setEditedTask({ ...task });
+    setEditedTask({ ...task, responsavel: respRaw });
   };
 
   const cancelEdit = () => {
@@ -119,14 +178,23 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   };
 
   const saveEdit = async () => {
-    if (editedTask && onTaskUpdate) {
-      const p = Math.max(0, Math.min(100, Math.round(Number(editedTask.percentualConcluido) || 0)));
-      await Promise.resolve(onTaskUpdate({ ...editedTask, percentualConcluido: p }));
+    if (!editedTask) return;
+
+    const p = Math.max(0, Math.min(100, Math.round(Number(editedTask.percentualConcluido) || 0)));
+
+    try {
+      // Persiste via callback do Dashboard (evita duplicidade/rotas conflitantes)
+      if (onTaskUpdate) {
+        await Promise.resolve(onTaskUpdate({ ...editedTask, percentualConcluido: p }));
+      }
       if (onRefresh) await Promise.resolve(onRefresh());
       else if (typeof window !== 'undefined') window.location.reload();
+    } catch (e) {
+      console.error('Erro no salvar:', e);
+    } finally {
+      setEditingId(null);
+      setEditedTask(null);
     }
-    setEditingId(null);
-    setEditedTask(null);
   };
 
   const handleField = <K extends keyof Task>(field: K, value: Task[K]) => {
@@ -214,22 +282,46 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                 const isCompleted = pct === 100;
                 const canUnstart = (pct > 0 && pct < 100) || (!!row.startDate && !isCompleted);
 
+                const respRaw = getResponsibleRaw(row);
+                const editableResp = canEditResponsible(row);
+
                 return (
                   <tr key={t.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
                     <td className="px-4 py-3 text-sm">
                       {canUnstart ? (
                         <div className="flex flex-col">
-                          <button
-                            type="button"
-                            className="px-2 py-2 text-xs rounded bg-blue-200 text-blue-800 hover:bg-blue-400 flex items-center gap-1"
-                            onClick={() => setPendingUnstartId(t.id)}
-                            title="Desfazer início"
-                          >
-                            <X size={14} /> Desfazer
-                          </button>
+                          <div className="text-[12px] text-gray-600 dark:text-gray-300">Responsável:</div>
+                          {isEditing ? (
+                            <div className="flex items-center gap-2">
+                              <select
+                                className="px-2 py-1 border rounded text-xs dark:bg-gray-800 dark:border-gray-700"
+                                disabled={!editableResp || loadingEmployees || employees.length === 0}
+                                value={respRaw}
+                                onChange={(e) => handleField('responsavel', e.target.value)}
+                                title={
+                                  !editableResp
+                                    ? 'Responsável já designado, não pode ser alterado'
+                                    : 'Selecionar responsável'
+                                }
+                              >
+                                <option value="">
+                                  {loadingEmployees ? 'Carregando...' : 'Selecionar'}
+                                </option>
+                                {employees.map((u) => (
+                                  <option key={u.id ?? u.name} value={u.name}>
+                                    {u.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <div className="text-sm text-gray-900 dark:text-gray-100">
+                              {displayResponsible(row)}
+                            </div>
+                          )}
                           {row.startDate && (
-                            <div className="mt-1 text-[11px] text-gray-500 text-center flex justify-center">
-                            Em: {formatDateTime(row.startDate)}
+                            <div className="mt-1 text-[11px] text-gray-500 text-left">
+                              Em: {formatDateTime(row.startDate)}
                             </div>
                           )}
                         </div>
@@ -237,13 +329,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                         <button
                           type="button"
                           className="btn btn-primary flex items-center text-xs disabled:opacity-50 disabled:cursor-not-allowed gap-1"
-                          onClick={async () => {
-                            if (onTaskStart) {
-                              await Promise.resolve(onTaskStart(t.id));
-                              if (onRefresh) await Promise.resolve(onRefresh());
-                              else if (typeof window !== 'undefined') window.location.reload();
-                            }
-                          }}
+                          onClick={() => setConfirmStartId(t.id)}
                           disabled={isCompleted || !onTaskStart}
                           title={isCompleted ? 'Tarefa concluída' : 'Iniciar tarefa'}
                         >
@@ -439,40 +525,31 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         </div>
       )}
 
-      {pendingUnstartId && (
+      {/* Modal de confirmação para iniciar tarefa */}
+      {confirmStartId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setPendingUnstartId(null)} />
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelStart} />
           <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
-            <h4 className="text-lg font-semibold text-red-700 dark:text-red-400">
-              Cancelar tarefa iniciada?
+            <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+              Confirmação
             </h4>
             <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              Tem certeza que deseja cancelar a tarefa? O progresso será perdido.
+              Deseja realmente iniciar esta tarefa?
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
                 className="px-3 py-2 text-sm border rounded dark:border-gray-600"
-                onClick={() => setPendingUnstartId(null)}
+                onClick={handleCancelStart}
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 className="px-3 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
-                onClick={async () => {
-                  try {
-                    if (onTaskUnstart && pendingUnstartId) {
-                      await Promise.resolve(onTaskUnstart(pendingUnstartId));
-                      if (onRefresh) await Promise.resolve(onRefresh());
-                      else if (typeof window !== 'undefined') window.location.reload();
-                    }
-                  } finally {
-                    setPendingUnstartId(null);
-                  }
-                }}
+                onClick={handleConfirmStart}
               >
-                Confirmar
+                Sim, iniciar
               </button>
             </div>
           </div>
