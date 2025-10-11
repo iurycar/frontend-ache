@@ -79,11 +79,39 @@ function formatDateTime(iso?: string | null): string {
 function getResponsibleRaw(t: any): string {
   return String(t?.responsavel ?? t?.responsible ?? '').trim();
 }
+
+// Formata para "Primeiro F. S."
+function shortEmployeeName(full?: string | null): string {
+  const s = String(full ?? '').trim();
+  if (!s) return '';
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return parts[0];
+
+  const firstName = parts[0];
+
+  // Remove partículas comuns dos sobrenomes
+  const stop = new Set(['da', 'de', 'do', 'das', 'dos', 'e', "d'", 'di', 'del', 'della', 'van', 'von', 'der']);
+  const surnames = parts.slice(1).filter((p) => !stop.has(p.toLowerCase()));
+
+  if (surnames.length === 0) return firstName;
+
+  const firstSurname = surnames[0];
+  const lastSurname = surnames[surnames.length - 1];
+
+  const fi = (firstSurname[0] || '').toUpperCase();
+  const li = (lastSurname[0] || '').toUpperCase();
+
+  if (!fi && !li) return firstName;
+  if (fi && li && fi !== li) return `${firstName} ${fi}. ${li}.`;
+  return `${firstName} ${fi || li}.`;
+}
+
 // Texto para exibição (fallback “Não definido”)
 function displayResponsible(t: any): string {
   const raw = getResponsibleRaw(t);
-  return raw || 'Não definido';
+  return raw ? shortEmployeeName(raw) : 'Não definido';
 }
+
 // Pode editar? Somente se vazio ou “Não definido”
 function canEditResponsible(t: any): boolean {
   const raw = getResponsibleRaw(t);
@@ -309,7 +337,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                                 </option>
                                 {employees.map((u) => (
                                   <option key={u.id ?? u.name} value={u.name}>
-                                    {u.name}
+                                    {shortEmployeeName(u.name)}
                                   </option>
                                 ))}
                               </select>
