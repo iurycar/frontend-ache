@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Edit2, Trash2, Save, X, Plus, Play } from 'lucide-react';
+import { Edit2, Trash2, Save, X, Plus, Play, CheckCircle } from 'lucide-react';
 
 export interface Task {
   id: string;
@@ -29,6 +29,7 @@ interface ScheduleTableProps {
   classificacaoOptions?: string[];
   categoriaOptions?: string[];
   faseOptions?: string[];
+  idFile?: string | null;
 }
 
 type Employee = { id: string; name: string };
@@ -131,12 +132,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   classificacaoOptions,
   categoriaOptions,
   faseOptions,
+  idFile,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedTask, setEditedTask] = useState<Task | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteStage, setDeleteStage] = useState<0 | 2>(0);
   const [confirmStartId, setConfirmStartId] = useState<string | null>(null);
+  const [isCompletingProject, setIsCompletingProject] = useState<boolean>(false);
+  const [showConfirmCompleteProject, setShowConfirmCompleteProject] = useState(false);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState<boolean>(false);
@@ -174,6 +178,39 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     () => faseOptions ?? uniqueNonEmpty(tasks.map((t) => t.fase)),
     [faseOptions, tasks]
   );
+
+  const allTasksCompleted = useMemo(() => {
+    return tasks.every((task) => task.percentualConcluido === 100);
+  }, [tasks]);
+
+  const handleCompleteProject = async () => {
+    if (!idFile) return;
+    try {
+      setIsCompletingProject(true);
+      const res = await fetch(`http://127.0.0.1:5000/projects/completed/${idFile}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Falha ao concluir o projeto');
+      const data = await res.json();
+      alert(data.mensagem || 'Projeto concluído com sucesso!');
+      if (onRefresh) await onRefresh();
+    } catch (error) {
+      console.error('Erro ao concluir projeto:', error);
+      alert('Não foi possível concluir o projeto.');
+    } finally {
+      setIsCompletingProject(false);
+      setShowConfirmCompleteProject(false);
+    }
+  };
+
+  const handleConfirmCompleteProject = () => {
+    setShowConfirmCompleteProject(true);
+  };
+
+  const handleCancelCompleteProject = () => {
+    setShowConfirmCompleteProject(false);
+  };
 
   const handleConfirmStart = async () => {
     if (confirmStartId && onTaskStart) {
@@ -253,17 +290,63 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden mt-6">
       <div className="flex justify-between items-center p-4 border-b dark:border-gray-800">
         <h3 className="font-medium text-lg">Lista de Tarefas</h3>
-        {onTaskAdd && (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onTaskAdd}
-            className="btn btn-primary flex items-center text-sm"
+            onClick={handleConfirmCompleteProject}
+            className={`btn flex items-center text-sm border ${
+              allTasksCompleted
+                ? 'btn-success border-green-600 text-black rounded hover:bg-green-400 dark:text-white dark:hover:text-black dark:hover:bg-green-200'
+                : 'btn-disabled border-gray-400 opacity-50 cursor-not-allowed'
+            }`}
+            disabled={!allTasksCompleted || isCompletingProject} // <-- realmente desabilita quando não concluído
           >
-            <Plus size={16} className="mr-1" />
-            Nova Tarefa
+            <CheckCircle size={16} className="mr-1" />
+            {isCompletingProject ? 'Concluindo...' : 'Concluir Projeto'}
           </button>
-        )}
+          {onTaskAdd && (
+            <button
+              type="button"
+              onClick={onTaskAdd}
+              className="btn btn-primary flex items-center text-sm"
+            >
+              <Plus size={16} className="mr-1" />
+              Nova Tarefa
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Modal de confirmação para concluir projeto */}
+      {showConfirmCompleteProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelCompleteProject} />
+          <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
+            <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+              Confirmação
+            </h4>
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+              Deseja realmente concluir este projeto? Esta ação não pode ser desfeita.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 text-sm border rounded dark:border-gray-600"
+                onClick={handleCancelCompleteProject}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                onClick={handleCompleteProject}
+              >
+                Sim, concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {(!tasks || tasks.length === 0) ? (
         <div className="text-center text-gray-500 py-10">Nenhuma tarefa encontrada.</div>
