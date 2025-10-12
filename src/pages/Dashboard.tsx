@@ -271,6 +271,7 @@ const Dashboard: React.FC = () => {
           onTaskDelete={handleTaskDelete}
           onTaskAdd={handleTaskAdd}
           onTaskStart={handleTaskStart}
+          idFile={selectedSpreadsheetId}
         />
       ) : (
         <div className="text-center text-gray-500 mt-10">
