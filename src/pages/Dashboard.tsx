@@ -89,8 +89,8 @@ const Dashboard: React.FC = () => {
           startDate: row?.start_date ?? null,
           endDate: row?.end_date ?? null,
           atraso: Number(row?.atraso ?? 0),
-          // Valor cru ('' quando não definido); exibição é tratada no componente
           responsavel: String(row?.responsavel ?? row?.responsible ?? '').trim() || '',
+          userId: row?.user_id ? String(row.user_id) : null,
         };
       });
 
@@ -139,8 +139,7 @@ const Dashboard: React.FC = () => {
         conclusion: Number.isFinite(updated.percentualConcluido)
           ? Number(updated.percentualConcluido) / 100
           : 0,
-        // Garante envio do campo (string vazia quando não definido)
-        responsible: (updated.responsavel ?? '').toString().trim(),
+        responsible: (updated.userId ?? '').toString().trim() || '',  // antes usava nome
       };
       const payload = isNew ? payloadBase : { ...payloadBase, num: linhaNumRaw };
 
@@ -196,6 +195,8 @@ const Dashboard: React.FC = () => {
         nome: t('new_task'),
         duracao: '',
         percentualConcluido: 0,
+        responsavel: '',
+        userId: null,         // novo campo
       } as unknown as Task,
     ]);
   };
