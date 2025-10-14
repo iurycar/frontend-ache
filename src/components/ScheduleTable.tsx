@@ -15,6 +15,7 @@ export interface Task {
   endDate?: string | null;
   atraso?: number;
   responsavel?: string | null;
+    userId?: string | null;
 }
 
 interface ScheduleTableProps {
@@ -231,10 +232,9 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   };
 
   const startEdit = (task: Task) => {
-    // Usa valor cru para edição ('' quando indefinido)
     const respRaw = getResponsibleRaw(task);
     setEditingId(task.id);
-    setEditedTask({ ...task, responsavel: respRaw });
+    setEditedTask({ ...task, responsavel: respRaw, userId: task.userId || task.userId });
   };
 
   const cancelEdit = () => {
@@ -244,13 +244,15 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
 
   const saveEdit = async () => {
     if (!editedTask) return;
-
     const p = Math.max(0, Math.min(100, Math.round(Number(editedTask.percentualConcluido) || 0)));
-
     try {
-      // Persiste via callback do Dashboard (evita duplicidade/rotas conflitantes)
       if (onTaskUpdate) {
-        await Promise.resolve(onTaskUpdate({ ...editedTask, percentualConcluido: p }));
+        await Promise.resolve(
+          onTaskUpdate({
+            ...editedTask,
+            percentualConcluido: p,
+          })
+        );
       }
       if (onRefresh) await Promise.resolve(onRefresh());
       else if (typeof window !== 'undefined') window.location.reload();
@@ -407,8 +409,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                               <select
                                 className="px-2 py-1 border rounded text-xs dark:bg-gray-800 dark:border-gray-700"
                                 disabled={!editableResp || loadingEmployees || employees.length === 0}
-                                value={respRaw}
-                                onChange={(e) => handleField('responsavel', e.target.value)}
+                                value={row.userId || ''}                     // antes: respRaw (nome)
+                                onChange={(e) => handleField('userId', e.target.value)}   // agora altera o ID
                                 title={
                                   !editableResp
                                     ? 'Responsável já designado, não pode ser alterado'
@@ -419,7 +421,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                                   {loadingEmployees ? 'Carregando...' : 'Selecionar'}
                                 </option>
                                 {employees.map((u) => (
-                                  <option key={u.id ?? u.name} value={u.name}>
+                                  <option key={u.id ?? u.name} value={u.id}>
                                     {shortEmployeeName(u.name)}
                                   </option>
                                 ))}
