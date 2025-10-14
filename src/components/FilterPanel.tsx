@@ -5,16 +5,39 @@ import { useLocale } from '../contexts/LocaleContext';
 interface FilterOption {
   id: string;
   label: string;
-  checked: boolean;
 }
+
+type ClassificacaoOption = string | { id: string; label: string };
 
 interface FilterPanelProps {
   onFilterChange: (filters: Record<string, string[]>) => void;
-  classificacaoOptions?: string[];
+  classificacaoOptions?: ClassificacaoOption[];
   faseOptions?: string[];
+  showClassificacao?: boolean;
+  showCategory?: boolean;
+  showCondicao?: boolean;
+  showFase?: boolean;
+  showStatus?: boolean;
+  classificacaoLabel?: string;
+  statusLabel?: string;
+  statusOptionsOverride?: string[];
+  addDefaultAllOption?: boolean;
 }
 
-const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange, classificacaoOptions, faseOptions }) => {
+const FilterPanel: React.FC<FilterPanelProps> = ({
+  onFilterChange,
+  classificacaoOptions,
+  faseOptions,
+  showClassificacao = true,
+  showCategory = true,
+  showCondicao = true,
+  showFase = true,
+  showStatus = true,
+  classificacaoLabel,
+  statusLabel,
+  statusOptionsOverride,
+  addDefaultAllOption = true
+}) => {
   const { t } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -23,16 +46,16 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange, classificacao
 
   // Categorias de exemplo (mantidas)
   const [categories, setCategories] = useState<FilterOption[]>([
-    { id: 'Blisters', label: 'Blisters', checked: false },
-    { id: 'Bisnagas', label: 'Bisnagas', checked: false },
-    { id: 'Cartucho', label: 'Cartucho', checked: false },
-    { id: 'Frascos de Plástico', label: 'Frascos de Plástico', checked: false },
-    { id: 'Ampolas', label: 'Ampolas', checked: false },
-    { id: 'Monodoses', label: 'Monodoses', checked: false },
-    { id: 'Potes para Pó', label: 'Potes para Pó', checked: false },
-    { id: 'Frascos de Vidro', label: 'Frascos de Vidro', checked: false },
-    { id: 'Sachets', label: 'Sachets', checked: false },
-  ]);
+    { id: 'Blisters', label: 'Blisters', checked: false as any },
+    { id: 'Bisnagas', label: 'Bisnagas', checked: false as any },
+    { id: 'Cartucho', label: 'Cartucho', checked: false as any },
+    { id: 'Frascos de Plástico', label: 'Frascos de Plástico', checked: false as any },
+    { id: 'Ampolas', label: 'Ampolas', checked: false as any },
+    { id: 'Monodoses', label: 'Monodoses', checked: false as any },
+    { id: 'Potes para Pó', label: 'Potes para Pó', checked: false as any },
+    { id: 'Frascos de Vidro', label: 'Frascos de Vidro', checked: false as any },
+    { id: 'Sachets', label: 'Sachets', checked: false as any },
+  ] as any);
 
   // Filtros adicionais
   const [condicao, setCondicao] = useState('');
@@ -78,7 +101,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange, classificacao
 
     if (classificacaoValue) filters.classificacao = [classificacaoValue];
 
-    const cat = cats.filter((c) => c.checked).map((c) => c.id);
+    const cat = cats.filter((c: any) => c.checked).map((c) => c.id);
     if (cat.length) filters.category = cat;
 
     if (cond) filters.condicao = [cond];
@@ -90,12 +113,29 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange, classificacao
 
   const clearFilters = () => {
     setClassificacaoSel('');
-    setCategories(categories.map((c) => ({ ...c, checked: false })));
+    setCategories(categories.map((c: any) => ({ ...c, checked: false })));
     setCondicao('');
     setObjective('');
     setStatus('');
     onFilterChange({});
   };
+
+  const renderOption = (opt: ClassificacaoOption) => {
+    if (typeof opt === 'string') {
+      return (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      );
+    }
+    return (
+      <option key={opt.id} value={opt.id}>
+        {opt.label}
+      </option>
+    );
+  };
+
+  const statusOptions = statusOptionsOverride ?? ['Concluídas', 'Em andamento', 'Não iniciada', 'Atrasadas'];
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-md mb-6">
@@ -115,95 +155,97 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ onFilterChange, classificacao
       {isOpen && (
         <div className="p-4 animate-fade-in">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Classificação */}
-            <div>
-              <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Classificação</h4>
-              <select
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
-                value={classificacaoSel}
-                onChange={(e) => handleClassificacaoChange(e.target.value)}
-              >
-                <option value="">Todas</option>
-                {(classificacaoOptions ?? []).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showClassificacao && (
+              <div>
+                <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">{classificacaoLabel ?? 'Classificação'}</h4>
+                <select
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+                  value={classificacaoSel}
+                  onChange={(e) => handleClassificacaoChange(e.target.value)}
+                >
+                  {addDefaultAllOption && <option value="">Todas</option>}
+                  {(classificacaoOptions ?? []).map(renderOption)}
+                </select>
+              </div>
+            )}
 
-            {/* Categoria */}
-            <div>
-              <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Categoria</h4>
-              <select
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
-                value={categories.find((c) => c.checked)?.id || ''}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-              >
-                <option value="">Todas</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showCategory && (
+              <div>
+                <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Categoria</h4>
+                <select
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+                  value={(categories as any).find((c: any) => c.checked)?.id || ''}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {(categories as any).map((category: any) => (
+                    <option key={category.id} value={category.id}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            {/* Condição (A/B/C) */}
-            <div>
-              <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Condição</h4>
-              <select
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
-                value={condicao}
-                onChange={(e) => handleCondicaoChange(e.target.value)}
-              >
-                <option value="">Todas</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-              </select>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Linhas com "Sempre" aparecem independentemente da seleção.
-              </p>
-            </div>
+            {showCondicao && (
+              <div>
+                <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Condição</h4>
+                <select
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+                  value={condicao}
+                  onChange={(e) => handleCondicaoChange(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                </select>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Linhas com "Sempre" aparecem independentemente da seleção.
+                </p>
+              </div>
+            )}
 
-            {/* Fase */}
-            <div>
-              <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Fase</h4>
-              <select
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
-                value={objective}
-                onChange={(e) => handleObjectiveChange(e.target.value)}
-              >
-                <option value="">Todas</option>
-                {(faseOptions ?? []).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {showFase && (
+              <div>
+                <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Fase</h4>
+                <select
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+                  value={objective}
+                  onChange={(e) => handleObjectiveChange(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {(faseOptions ?? []).map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          {/* Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            <div>
-              <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">Status</h4>
-              <select
-                className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
-                value={status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="Concluídas">Concluídas</option>
-                <option value="Em andamento">Em andamento</option>
-                <option value="Não iniciada">Não iniciada</option>
-                <option value="Atrasadas">Atrasadas</option>
-              </select>
+          {showStatus && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+              <div>
+                <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-200">{statusLabel ?? 'Status'}</h4>
+                <select
+                  className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+                  value={status}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {statusOptions.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-end mt-6">
             <button
