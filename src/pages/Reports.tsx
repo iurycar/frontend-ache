@@ -3,6 +3,7 @@ import Layout from '../components/Layout';
 import { FileText, Download, AlarmClock, TrendingUp, BarChart3, PieChart, CheckSquare } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
+import ProgressTable from '../components/ProgressTable';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -242,6 +243,8 @@ const Reports: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <ProgressTable />
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md">
           <div className="p-6 border-b">
