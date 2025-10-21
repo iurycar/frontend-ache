@@ -19,8 +19,6 @@ type Task = {
 
 type ViewMode = 'list' | 'detail';
 
-const API = 'http://127.0.0.1:5000';
-
 // Formata ISO/RFC-1123 para dd/mm/aaaa
 function formatDateBR(iso?: string | null): string {
   if (!iso) return '—';
@@ -48,7 +46,7 @@ const ProgressTable: React.FC = () => {
     const loadEmployees = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API}/team/employees`, { credentials: 'include' });
+        const res = await fetch(`/api/team/employees`, { credentials: 'include' });
         if (!res.ok) throw new Error('Falha ao carregar funcionários.');
         const json = await res.json();
         const employees: Employee[] = (json?.employees || []).map((emp: any) => ({
@@ -69,7 +67,7 @@ const ProgressTable: React.FC = () => {
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        const res = await fetch(`${API}/arquivos_usuario`, { credentials: 'include' });
+        const res = await fetch(`/api/arquivos_usuario`, { credentials: 'include' });
         const data = await res.json();
         const opts: ProjectOption[] = (data.arquivos || [])
           .map((a: any) => {
@@ -112,7 +110,7 @@ const ProgressTable: React.FC = () => {
       setTasksLoading(true);
       try {
         const idParam = selectedProjectId || 'null';
-        const res = await fetch(`${API}/employee/tasks/${selectedEmployee.id}/${encodeURIComponent(idParam)}`, {
+        const res = await fetch(`/api/employee/tasks/${selectedEmployee.id}/${encodeURIComponent(idParam)}`, {
           credentials: 'include',
         });
         const json = await res.json();

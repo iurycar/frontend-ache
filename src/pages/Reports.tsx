@@ -53,7 +53,7 @@ const Reports: React.FC = () => {
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        const res = await fetch('http://127.0.0.1:5000/arquivos_usuario', { credentials: 'include' });
+        const res = await fetch('/api/arquivos_usuario', { credentials: 'include' });
         const data = await res.json();
         const options: ProjectOption[] = (data.arquivos || []).map((a: any) => ({
           id: a.id,
@@ -75,7 +75,7 @@ const Reports: React.FC = () => {
       try {
         // 'null' informa ao backend para somar todos os projetos do time
         const idParam = selectedProjectId === 'all' ? 'null' : selectedProjectId;
-        const res = await fetch(`http://127.0.0.1:5000/project/progress_tasks/${idParam}`, { credentials: 'include' });
+        const res = await fetch(`/api/project/progress_tasks/${idParam}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Falha ao buscar progresso');
         const json = await res.json();
         const p = (json?.progresso || {}) as Progress;

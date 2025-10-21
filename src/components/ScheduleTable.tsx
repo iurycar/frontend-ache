@@ -150,7 +150,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     const fetchEmployees = async () => {
       try {
         setLoadingEmployees(true);
-        const res = await fetch('http://127.0.0.1:5000/team/employees', {
+        const res = await fetch('/api/team/employees', {
           method: 'GET',
           credentials: 'include',
         });
@@ -188,7 +188,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     if (!idFile) return;
     try {
       setIsCompletingProject(true);
-      const res = await fetch(`http://127.0.0.1:5000/projects/completed/${idFile}`, {
+      const res = await fetch(`/api/projects/completed/${idFile}`, {
         method: 'GET',
         credentials: 'include',
       });

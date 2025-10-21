@@ -28,7 +28,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // NOVO: Função para verificar o status do login no backend
   const checkLoginStatus = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/status', {
+      const response = await fetch('/api/status', {
         method: 'GET',
         credentials: 'include'
       });
@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       // Faz a chamada real para a API de login do backend
-      const response = await fetch('http://127.0.0.1:5000/login', {
+      const response = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch('http://127.0.0.1:5000/logout', {
+      await fetch('/api/logout', {
         method: 'POST',
         credentials: 'include'
       });

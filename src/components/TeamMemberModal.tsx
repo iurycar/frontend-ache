@@ -1,45 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Phone, MapPin, Briefcase, Award } from 'lucide-react';
+import { X, User, Mail, Phone, MapPin, Briefcase, Users } from 'lucide-react';
 
-interface TeamMember {
+export interface TeamMember {
   id: string;
   name: string;
   role: string;
-  department: string;
+  team: string;
   email: string;
   phone: string;
   location: string;
-  avatar?: string;
-  status: 'active' | 'inactive' | 'vacation';
-  joinDate: Date;
+  status: 'active' | 'inactive';
   tasksCompleted: number;
-  currentProjects: number;
-  skills: string[];
 }
 
 interface TeamMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (member: Omit<TeamMember, 'id' | 'tasksCompleted' | 'currentProjects'>) => void;
+  onSave: (member: Omit<TeamMember, 'id' | 'tasksCompleted'>) => void;
   member?: TeamMember | null;
 }
 
-const TeamMemberModal: React.FC<TeamMemberModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  onSave, 
-  member 
+const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  member
 }) => {
   const [formData, setFormData] = useState({
     name: '',
     role: '',
-    department: '',
+    team: '',
     email: '',
     phone: '',
     location: '',
     status: 'active' as TeamMember['status'],
-    joinDate: new Date().toISOString().split('T')[0],
-    skills: ''
   });
 
   useEffect(() => {
@@ -47,42 +41,36 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
       setFormData({
         name: member.name,
         role: member.role,
-        department: member.department,
+        team: member.team,
         email: member.email,
         phone: member.phone,
         location: member.location,
         status: member.status,
-        joinDate: member.joinDate.toISOString().split('T')[0],
-        skills: member.skills.join(', ')
       });
     } else {
       setFormData({
         name: '',
         role: '',
-        department: '',
+        team: '',
         email: '',
         phone: '',
         location: '',
         status: 'active',
-        joinDate: new Date().toISOString().split('T')[0],
-        skills: ''
       });
     }
   }, [member]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const newMember: Omit<TeamMember, 'id' | 'tasksCompleted' | 'currentProjects'> = {
+
+    const newMember: Omit<TeamMember, 'id' | 'tasksCompleted'> = {
       name: formData.name,
       role: formData.role,
-      department: formData.department,
+      team: formData.team,
       email: formData.email,
       phone: formData.phone,
       location: formData.location,
       status: formData.status,
-      joinDate: new Date(formData.joinDate),
-      skills: formData.skills ? formData.skills.split(',').map(s => s.trim()) : []
     };
 
     onSave(newMember);
@@ -93,13 +81,11 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
     setFormData({
       name: '',
       role: '',
-      department: '',
+      team: '',
       email: '',
       phone: '',
       location: '',
       status: 'active',
-      joinDate: new Date().toISOString().split('T')[0],
-      skills: ''
     });
     onClose();
   };
@@ -128,7 +114,7 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
               Nome Completo
             </label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
                 value={formData.name}
@@ -140,14 +126,14 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
             </div>
           </div>
 
-          {/* Cargo e Departamento */}
+          {/* Cargo e Equipe */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Cargo
               </label>
               <div className="relative">
-                <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="text"
                   value={formData.role}
@@ -160,25 +146,19 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Departamento
+                Equipe
               </label>
-              <select
-                value={formData.department}
-                onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                required
-              >
-                <option value="">Selecione...</option>
-                <option value="Desenvolvimento">Desenvolvimento</option>
-                <option value="Tecnologia">Tecnologia</option>
-                <option value="Design">Design</option>
-                <option value="Qualidade">Qualidade</option>
-                <option value="Marketing">Marketing</option>
-                <option value="Vendas">Vendas</option>
-                <option value="RH">Recursos Humanos</option>
-                <option value="Financeiro">Financeiro</option>
-                <option value="Operações">Operações</option>
-              </select>
+              <div className="relative">
+                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  value={formData.team}
+                  onChange={(e) => setFormData(prev => ({ ...prev, team: e.target.value }))}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="Nome da equipe"
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -189,7 +169,7 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
                 Email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="email"
                   value={formData.email}
@@ -205,7 +185,7 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
                 Telefone
               </label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
                   type="tel"
                   value={formData.phone}
@@ -224,63 +204,31 @@ const TeamMemberModal: React.FC<TeamMemberModalProps> = ({
               Localização
             </label>
             <div className="relative">
-              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <input
                 type="text"
                 value={formData.location}
                 onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Cidade, Estado"
+                placeholder="Rua, Número, Cidade, Estado, País"
                 required
               />
             </div>
           </div>
 
-          {/* Status e Data de Admissão */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as TeamMember['status'] }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              >
-                <option value="active">Ativo</option>
-                <option value="inactive">Inativo</option>
-                <option value="vacation">Férias</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Data de Admissão
-              </label>
-              <input
-                type="date"
-                value={formData.joinDate}
-                onChange={(e) => setFormData(prev => ({ ...prev, joinDate: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Habilidades */}
+          {/* Status */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Habilidades
+              Status
             </label>
-            <div className="relative">
-              <Award className="absolute left-3 top-3 text-gray-400" size={16} />
-              <textarea
-                value={formData.skills}
-                onChange={(e) => setFormData(prev => ({ ...prev, skills: e.target.value }))}
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                rows={3}
-                placeholder="Habilidade1, Habilidade2, Habilidade3"
-              />
-            </div>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value as TeamMember['status'] }))}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            >
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+            </select>
           </div>
 
           {/* Botões */}
