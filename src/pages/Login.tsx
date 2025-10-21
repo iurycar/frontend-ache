@@ -4,6 +4,22 @@ import { useAuth } from '../contexts/AuthContext';
 import { UserCircle, Lock, Shield } from 'lucide-react';
 
 const Login: React.FC = () => {
+  const LogoSection = () => (
+    <div style={{
+      position: 'absolute',
+      top: 20,
+      right: 20,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+      zIndex: 10
+    }}>
+      <img src="/Logo_Ache.png" alt="Logo Aché" style={{ height: 50 }} />
+      <img src="/Logo_Liora.png" alt="Logo Liora" style={{ height: 50 }} />
+      {/* Exemplo de como adicionar uma nova imagem PNG */}
+      {/* <img src="/sua-imagem.png" alt="Descrição da imagem" style={{ height: 50 }} /> */}
+    </div>
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -44,6 +60,8 @@ const Login: React.FC = () => {
   };
 
   return (
+    <div style={{ position: 'relative', minHeight: '100vh' }}>
+      <LogoSection />
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md animate-fade-in">
         <div className="text-center mb-8">
@@ -138,6 +156,7 @@ const Login: React.FC = () => {
           </button>
         </form>
       </div>
+    </div>
     </div>
   );
 };
