@@ -15,7 +15,7 @@ const ChatbotWidget: React.FC = () => {
   } = useChatbot();
   const { t } = useLocale();
   const { theme } = useTheme();
-  const isDarkMode = theme === 'dark'; // 🔥 aqui está a correção
+  const isDarkMode = theme === 'dark';
   
   const [input, setInput] = useState('');
   const endOfMessagesRef = useRef<HTMLDivElement>(null);

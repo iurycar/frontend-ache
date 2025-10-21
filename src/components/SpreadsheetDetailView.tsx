@@ -64,7 +64,7 @@ const SpreadsheetDetailView: React.FC<SpreadsheetDetailViewProps> = ({
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`http://127.0.0.1:5000/arquivo/${spreadsheetId}/dados`, {
+        const response = await fetch(`/api/arquivo/${spreadsheetId}/dados`, {
           method: 'GET',
           credentials: 'include'
         });

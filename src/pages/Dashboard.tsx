@@ -20,7 +20,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchFromBackend = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:5000/arquivos_usuario', {
+        const response = await fetch('/api/arquivos_usuario', {
           method: 'GET',
           credentials: 'include',
         });
@@ -52,14 +52,14 @@ const Dashboard: React.FC = () => {
   }, [addSpreadsheet, importedSpreadsheets, t]);
 
   const fetchSpreadsheetTasks = async (spreadsheetId: string) => {
-    if (!spreadsheetId) {
+    if (spreadsheetId === '' || spreadsheetId == null) {
       setTasks([]);
       return;
     }
     try {
       setLoadingTasks(true);
       setTasksError(null);
-      const res = await fetch(`http://127.0.0.1:5000/arquivo/${spreadsheetId}/dados`, {
+      const res = await fetch(`/api/arquivo/${spreadsheetId}/dados`, {
         method: 'GET',
         credentials: 'include',
       });
@@ -108,13 +108,16 @@ const Dashboard: React.FC = () => {
   }, [selectedSpreadsheetId]);
 
   const handleTaskStart = async (id: string) => {
-    if (!selectedSpreadsheetId) return;
+    if (!selectedSpreadsheetId || selectedSpreadsheetId === 'null') {
+      alert('Esta ação não está disponível quando "Todos os projetos" está selecionado.');
+      return;
+    }
     try {
       const task = tasks.find((t) => t.id === id);
       const num = Number(task?.numero);
       if (!Number.isFinite(num)) throw new Error('Número de linha inválido');
       const res = await fetch(
-        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/start/${num}`,
+        `/api/arquivo/${selectedSpreadsheetId}/start/${num}`,
         { method: 'POST', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao iniciar tarefa');
@@ -125,6 +128,10 @@ const Dashboard: React.FC = () => {
   };
 
   const handleTaskUpdate = async (updated: Task) => {
+    if (!selectedSpreadsheetId || selectedSpreadsheetId === 'null') {
+      alert('Não é possível salvar quando "Todos os projetos" está selecionado.');
+      return;
+    }
     try {
       const linhaNumRaw = Number(updated.numero);
       const isNew = !Number.isFinite(linhaNumRaw) || linhaNumRaw < 1;
@@ -144,8 +151,8 @@ const Dashboard: React.FC = () => {
       const payload = isNew ? payloadBase : { ...payloadBase, num: linhaNumRaw };
 
       const url = isNew
-        ? `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/0`
-        : `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${linhaNumRaw}`;
+        ? `/api/arquivo/${selectedSpreadsheetId}/linha/0`
+        : `/api/arquivo/${selectedSpreadsheetId}/linha/${linhaNumRaw}`;
 
       const res = await fetch(url, {
         method: 'PATCH',
@@ -161,8 +168,8 @@ const Dashboard: React.FC = () => {
   };
 
   const handleTaskDelete = async (id: string) => {
-    if (!selectedSpreadsheetId) {
-      alert('Selecione uma planilha antes de excluir.');
+    if (!selectedSpreadsheetId || selectedSpreadsheetId === 'null') {
+      alert('Não é possível excluir quando "Todos os projetos" está selecionado.');
       return;
     }
     try {
@@ -170,7 +177,7 @@ const Dashboard: React.FC = () => {
       const num = Number(task?.numero);
       if (!Number.isFinite(num)) throw new Error('Número de linha inválido');
       const res = await fetch(
-        `http://127.0.0.1:5000/arquivo/${selectedSpreadsheetId}/linha/${num}`,
+        `/api/arquivo/${selectedSpreadsheetId}/linha/${num}`,
         { method: 'DELETE', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao excluir a tarefa.');
@@ -245,6 +252,7 @@ const Dashboard: React.FC = () => {
           onChange={(e) => setSelectedSpreadsheetId(e.target.value)}
         >
           <option value="">-- Escolha uma planilha --</option>
+          <option value="null">Todos os projetos da equipe</option>
           {importedSpreadsheets.map((sheet) => (
             <option key={sheet.id} value={sheet.id}>
               {sheet.project} | {sheet.name}

@@ -34,7 +34,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({
 
   const fetchImportedFiles = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:5000/arquivos_usuario', {
+      const response = await fetch('/api/arquivos_usuario', {
         method: 'GET',
         credentials: 'include'
       });
@@ -66,7 +66,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({
   }, [importedFiles, searchTerm]);
 
   const handleDownload = (fileId: string) => {
-    window.location.href = `http://127.0.0.1:5000/download/${fileId}`;
+    window.location.href = `/api/download/${fileId}`;
   };
 
   const handleDeleteClick = (file: UploadedFile) => {
@@ -76,7 +76,7 @@ const SpreadsheetViewer: React.FC<SpreadsheetViewerProps> = ({
   const handleConfirmDelete = async () => {
     if (!fileToDelete) return;
     try {
-      const response = await fetch(`http://127.0.0.1:5000/delete/${fileToDelete.id}`, {
+      const response = await fetch(`/api/delete/${fileToDelete.id}`, {
         method: 'DELETE',
         credentials: 'include',
       });
