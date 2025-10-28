@@ -91,7 +91,7 @@ const ChatbotWidget: React.FC = () => {
                   : 'bg-white text-gray-800 shadow rounded-tl-none'
               }`}
             >
-              <p className="text-sm">{message.text}</p>
+              <p className="text-sm whitespace-pre-line">{message.text}</p>
               <span className="block text-[10px] opacity-70 mt-1">
                 {new Date(message.timestamp).toLocaleTimeString('pt-BR', {
                   hour: '2-digit',

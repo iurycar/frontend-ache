@@ -35,16 +35,31 @@ const formatDate = (value?: unknown) => {
   }).format(d);
 };
 
-const formatCell = (key: string, value: unknown) => {
+const formatCell = (key: string, value: unknown): React.ReactNode => {
   if (value === null || value === undefined) return '';
   switch (key) {
     case 'start_date':
     case 'end_date':
       return formatDate(value);
     case 'conclusion': {
-      if (typeof value === 'number') return `${(value * 100).toFixed(0)}%`; // Multiplica por 100
+      if (typeof value === 'number') return `${(value * 100).toFixed(0)}%`;
       const parsed = parseFloat(String(value).replace(',', '.'));
-      return isNaN(parsed) ? String(value) : `${(parsed * 100).toFixed(0)}%`; // Multiplica por 100
+      return isNaN(parsed) ? String(value) : `${(parsed * 100).toFixed(0)}%`;
+    }
+    case 'reference': {
+      const href = String(value).trim();
+      if (!href) return '';
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          Abrir Documento
+        </a>
+      );
     }
     default:
       return String(value);

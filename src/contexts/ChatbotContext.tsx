@@ -1,5 +1,3 @@
-// Exemplo, em React, do acesso da API pelo frontend.
-
 import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
 interface Message {
@@ -24,6 +22,11 @@ const ChatbotContext = createContext<ChatbotContextType | undefined>(undefined);
 
 interface ChatbotProviderProps {
   children: ReactNode;
+}
+
+// Componente para renderizar mensagens com suporte a quebras de linha
+function MessageBubble({ text }: { text: string }) {
+  return <div style={{ whiteSpace: 'pre-line' }}>{text}</div>;
 }
 
 const ChatbotProvider: React.FC<ChatbotProviderProps> = ({ children }) => {
@@ -66,32 +69,31 @@ const ChatbotProvider: React.FC<ChatbotProviderProps> = ({ children }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/chat', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mensagem: text }),
       });
-      
+
       if (!response.ok) {
         throw new Error(`Erro na rede: ${response.statusText}`);
       }
 
       const data = await response.json();
-      
+
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: data.resposta,
         sender: 'bot',
         timestamp: new Date(),
       };
-      
+
       setMessages(prev => [...prev, botResponse]);
       setChatMode(data.modo_chat);
-
     } catch (error) {
       console.error('Erro ao obter resposta do bot:', error);
-      
+
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: 'Desculpe, ocorreu um erro ao processar sua mensagem. Tente novamente.',
