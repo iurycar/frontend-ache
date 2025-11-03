@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Edit2, Trash2, Save, X, Plus, Play, CheckCircle } from 'lucide-react';
+import { Edit2, Trash2, Save, X, Plus, Play, CheckCircle, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 
 export interface Task {
   id: string;
@@ -15,7 +15,10 @@ export interface Task {
   endDate?: string | null;
   atraso?: number;
   responsavel?: string | null;
-    userId?: string | null;
+  userId?: string | null;
+  // novos campos para a coluna "Como fazer"
+  text?: string | null;
+  reference?: string | null;
 }
 
 interface ScheduleTableProps {
@@ -269,6 +272,68 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     setEditedTask({ ...editedTask, [field]: value });
   };
 
+  // Ordenação ativa somente nas colunas: Número, Categoria, Fase, Condição, Nome e Concluído
+  type SortKey = 'numero' | 'categoria' | 'fase' | 'condicao' | 'nome' | 'percentualConcluido';
+
+  const [sortKey, setSortKey] = useState<SortKey>('numero');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (key: SortKey) => {
+    setSortDir((prev) => (sortKey === key ? (prev === 'asc' ? 'desc' : 'asc') : 'asc'));
+    setSortKey(key);
+  };
+
+  const renderSortIcon = (key: SortKey) => {
+    if (sortKey !== key) return <ArrowUpDown size={14} className="inline-block opacity-60" />;
+    return sortDir === 'asc' ? <ChevronUp size={14} className="inline-block" /> : <ChevronDown size={14} className="inline-block" />;
+  };
+
+  const cmpStr = (a?: string | null, b?: string | null) =>
+    String(a ?? '').localeCompare(String(b ?? ''), 'pt-BR', { sensitivity: 'base', numeric: false });
+
+  const cmpNum = (a?: number | null, b?: number | null) => {
+    const na = Number.isFinite(Number(a)) ? Number(a) : NaN;
+    const nb = Number.isFinite(Number(b)) ? Number(b) : NaN;
+    if (isNaN(na) && isNaN(nb)) return 0;
+    if (isNaN(na)) return 1; // NaN vai pro fim
+    if (isNaN(nb)) return -1;
+    return na - nb;
+  };
+
+  const sortedTasks = useMemo(() => {
+    const arr = [...tasks];
+    arr.sort((a, b) => {
+      let r = 0;
+      switch (sortKey) {
+        case 'numero': {
+          const na = Number(a.numero);
+          const nb = Number(b.numero);
+          r = cmpNum(isNaN(na) ? null : na, isNaN(nb) ? null : nb);
+          break;
+        }
+        case 'categoria':
+          r = cmpStr(a.categoria, b.categoria);
+          break;
+        case 'fase':
+          r = cmpStr(a.fase, b.fase);
+          break;
+        case 'condicao':
+          r = cmpStr(a.condicao, b.condicao);
+          break;
+        case 'nome':
+          r = cmpStr(a.nome, b.nome);
+          break;
+        case 'percentualConcluido':
+          r = cmpNum(a.percentualConcluido, b.percentualConcluido);
+          break;
+        default:
+          r = 0;
+      }
+      return sortDir === 'asc' ? r : -r;
+    });
+    return arr;
+  }, [tasks, sortKey, sortDir]);
+
   if (loading) {
     return <div className="text-center text-gray-500 mt-10">Carregando tarefas...</div>;
   }
@@ -301,7 +366,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                 ? 'btn-success border-green-600 text-black rounded hover:bg-green-400 dark:text-white dark:hover:text-black dark:hover:bg-green-200'
                 : 'btn-disabled border-gray-400 opacity-50 cursor-not-allowed'
             }`}
-            disabled={!allTasksCompleted || isCompletingProject} // <-- realmente desabilita quando não concluído
+            disabled={!allTasksCompleted || isCompletingProject}
           >
             <CheckCircle size={16} className="mr-1" />
             {isCompletingProject ? 'Concluindo...' : 'Concluir Projeto'}
@@ -319,37 +384,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         </div>
       </div>
 
-      {/* Modal de confirmação para concluir projeto */}
-      {showConfirmCompleteProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={handleCancelCompleteProject} />
-          <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
-            <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
-              Confirmação
-            </h4>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              Deseja realmente concluir este projeto? Esta ação não pode ser desfeita.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                className="px-3 py-2 text-sm border rounded dark:border-gray-600"
-                onClick={handleCancelCompleteProject}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-                onClick={handleCompleteProject}
-              >
-                Sim, concluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {(!tasks || tasks.length === 0) ? (
         <div className="text-center text-gray-500 py-10">Nenhuma tarefa encontrada.</div>
       ) : (
@@ -357,23 +391,85 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             <thead className="bg-gray-200 dark:bg-gray-800">
               <tr>
-                <th className="px-10 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Início</th>
-                <th className="px-2 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Número</th>
-                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Classificação</th>
-                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Categoria</th>
-                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Fase</th>
-                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Condição</th>
-                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Nome</th>
-                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Duração</th>
-                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Concluído</th>
-                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Status</th>
+                {/* Início - sem ordenação */}
+                <th className="px-10 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  Início
+                </th>
+
+                {/* Número - com ordenação */}
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  <button type="button" onClick={() => toggleSort('numero')} className="flex items-center gap-1" title="Ordenar por número">
+                    Número {renderSortIcon('numero')}
+                  </button>
+                </th>
+
+                {/* Classificação - sem ordenação */}
+                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  Classificação
+                </th>
+
+                {/* Categoria - com ordenação */}
+                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  <button type="button" onClick={() => toggleSort('categoria')} className="flex items-center gap-1" title="Ordenar por categoria">
+                    Categoria {renderSortIcon('categoria')}
+                  </button>
+                </th>
+
+                {/* Fase - com ordenação */}
+                <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  <button type="button" onClick={() => toggleSort('fase')} className="flex items-center gap-1" title="Ordenar por fase">
+                    Fase {renderSortIcon('fase')}
+                  </button>
+                </th>
+
+                {/* Condição - com ordenação */}
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  <button type="button" onClick={() => toggleSort('condicao')} className="flex items-center gap-1" title="Ordenar por condição">
+                    Condição {renderSortIcon('condicao')}
+                  </button>
+                </th>
+
+                {/* Nome - com ordenação */}
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  <button type="button" onClick={() => toggleSort('nome')} className="flex items-center gap-1" title="Ordenar por nome">
+                    Nome {renderSortIcon('nome')}
+                  </button>
+                </th>
+
+                {/* Como fazer - sem ordenação */}
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  Como fazer
+                </th>
+
+                {/* Duração - sem ordenação */}
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  Duração
+                </th>
+
+                {/* Concluído - com ordenação */}
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort('percentualConcluido')}
+                    className="flex items-center gap-1"
+                    title="Ordenar por concluído"
+                  >
+                    Concluído {renderSortIcon('percentualConcluido')}
+                  </button>
+                </th>
+
+                {/* Status - sem ordenação */}
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
+                  Status
+                </th>
+
                 {(onTaskUpdate || onTaskDelete) && (
                   <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Ações</th>
                 )}
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-              {tasks.map((t) => {
+              {sortedTasks.map((t) => {
                 const isEditing = editingId === t.id;
                 const row = isEditing && editedTask ? editedTask : t;
 
@@ -409,8 +505,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                               <select
                                 className="px-2 py-1 border rounded text-xs dark:bg-gray-800 dark:border-gray-700"
                                 disabled={!editableResp || loadingEmployees || employees.length === 0}
-                                value={row.userId || ''}                     // antes: respRaw (nome)
-                                onChange={(e) => handleField('userId', e.target.value)}   // agora altera o ID
+                                value={row.userId || ''}
+                                onChange={(e) => handleField('userId', e.target.value)}
                                 title={
                                   !editableResp
                                     ? 'Responsável já designado, não pode ser alterado'
@@ -542,6 +638,26 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
+                    {/* Como fazer */}
+                    <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
+                      <div className="flex flex-col">
+                        <span className="text-sm">{row.text || '-'}</span>
+                        {row.reference ? (
+                          <a
+                            href={row.reference}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                            title="Abrir documento referência em uma nova aba"
+                          >
+                            Abrir
+                          </a>
+                        ) : (
+                          <span className="text-xs text-gray-400 mt-1">Sem link</span>
+                        )}
+                      </div>
+                    </td>
+
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       {isEditing ? (
                         <input
@@ -570,14 +686,31 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                     </td>
 
                     <td className="px-2 py-1 text-sm text-center whitespace-nowrap">
-                      <div className="flex flex-col items-center">
-                        <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>
-                        {Number(row.atraso || 0) > 0 && (
-                          <span className="mt-1 text-[11px] text-red-600">
-                            Atraso: {Number(row.atraso)} dia{Number(row.atraso) > 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
+                      {(() => {
+                        let text = 'Andamento';
+                        let cls = 'bg-yellow-100 text-yellow-800';
+                        const atraso = Number(row.atraso || 0);
+                        if (row.percentualConcluido === 100) {
+                          text = 'Concluída';
+                          cls = 'bg-green-100 text-green-800';
+                        } else if (atraso > 0) {
+                          text = 'Atrasada';
+                          cls = 'bg-red-100 text-red-800';
+                        } else if (row.percentualConcluido === 0) {
+                          text = 'Não iniciada';
+                          cls = 'bg-gray-100 text-gray-800';
+                        }
+                        return (
+                          <div className="flex flex-col items-center">
+                            <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>
+                            {Number(row.atraso || 0) > 0 && (
+                              <span className="mt-1 text-[11px] text-red-600">
+                                Atraso: {Number(row.atraso)} dia{Number(row.atraso) > 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {(onTaskUpdate || onTaskDelete) && (
@@ -635,6 +768,37 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Modal de confirmação para concluir projeto */}
+      {showConfirmCompleteProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCancelCompleteProject} />
+          <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
+            <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+              Confirmação
+            </h4>
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+              Deseja realmente concluir este projeto? Esta ação não pode ser desfeita.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-2 text-sm border rounded dark:border-gray-600"
+                onClick={handleCancelCompleteProject}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
+                onClick={handleCompleteProject}
+              >
+                Sim, concluir
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

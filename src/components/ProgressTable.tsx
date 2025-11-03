@@ -11,7 +11,7 @@ type Task = {
   num?: number | string;
   name?: string;
   duration?: string | number;
-  conclusion?: number; // 0..1
+  conclusion?: number;
   start_date?: string | null;
   end_date?: string | null;
   atraso?: number | null;
