@@ -91,6 +91,9 @@ const Dashboard: React.FC = () => {
           atraso: Number(row?.atraso ?? 0),
           responsavel: String(row?.responsavel ?? row?.responsible ?? '').trim() || '',
           userId: row?.user_id ? String(row.user_id) : null,
+          // novos campos para "Como fazer"
+          text: typeof row?.text === 'string' ? row.text : row?.text != null ? String(row.text) : '',
+          reference: typeof row?.reference === 'string' ? row.reference : row?.reference != null ? String(row.reference) : '',
         };
       });
 
