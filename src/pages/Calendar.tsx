@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Clock, Users, MapPin, Edit2, Trash2 } from 'lucide-react';
 import EventModal from '../components/EventModal';
@@ -6,19 +6,33 @@ import GanttChart from '../components/GanttChart';
 
 interface Event {
   id: string;
-  title: string;
+  title: string; // "<num> - <projeto>"
   date: Date;
   time: string;
   type: 'meeting' | 'deadline' | 'review' | 'other';
   participants?: string[];
   location?: string;
   description?: string;
-  // Campos para Gantt
-  duration?: number; // duração em dias
-  progress?: number; // progresso de 0 a 100
-  dependencies?: string[]; // IDs dos eventos dos quais depende
+  duration?: number;       // duração em dias
+  progress?: number;       // 0 a 100
   priority?: 'low' | 'medium' | 'high';
+  id_file?: string;        // projeto (id)
+  num?: number;            // número da tarefa
+  deadline?: Date;
 }
+
+type BackendTask = {
+  num: number;
+  name?: string | null;
+  duration?: string | number | null;     // pode vir como "5 dias" ou número
+  conclusion?: number | string | null;   // 0–1 ou 0–100
+  start_date?: string | null;            // ISO/SQL date
+  deadline?: string | null;              // ISO/SQL date
+  end_date?: string | null;              // ISO/SQL date
+  delay?: number | null;                 // calculado pelo backend (dias em atraso)
+  id_file?: string | null;               // projeto (id)
+  project_name?: string | null;          // projeto (nome) se backend retornar
+};
 
 const Calendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -26,65 +40,159 @@ const Calendar: React.FC = () => {
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [viewMode, setViewMode] = useState<'calendar' | 'gantt'>('gantt');
-  const [events, setEvents] = useState<Event[]>([
-    {
-      id: '1',
-      title: 'Reunião de Briefing - Projeto Alpha',
-      date: new Date(2024, 5, 15),
-      time: '09:00',
-      type: 'meeting',
-      participants: ['João Silva', 'Maria Santos'],
-      location: 'Sala de Reuniões A',
-      description: 'Definição dos requisitos iniciais do projeto',
-      duration: 1,
-      progress: 100,
-      priority: 'high'
-    },
-    {
-      id: '2',
-      title: 'Desenvolvimento do Protótipo',
-      date: new Date(2024, 5, 16),
-      time: '09:00',
-      type: 'other',
-      description: 'Desenvolvimento do protótipo inicial',
-      duration: 5,
-      progress: 60,
-      dependencies: ['1'],
-      priority: 'high'
-    },
-    {
-      id: '3',
-      title: 'Entrega do Protótipo',
-      date: new Date(2024, 5, 20),
-      time: '17:00',
-      type: 'deadline',
-      description: 'Prazo final para entrega do protótipo inicial',
-      duration: 1,
-      progress: 0,
-      dependencies: ['2'],
-      priority: 'high'
-    },
-    {
-      id: '4',
-      title: 'Revisão de Qualidade',
-      date: new Date(2024, 5, 21),
-      time: '14:00',
-      type: 'review',
-      participants: ['Equipe de QA'],
-      location: 'Laboratório',
-      description: 'Análise de qualidade dos materiais',
-      duration: 3,
-      progress: 0,
-      dependencies: ['3'],
-      priority: 'medium'
-    }
-  ]);
 
+  // Eventos carregados do backend (apenas tarefas do funcionário)
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Helpers de parsing/mapeamento
+  const parseDurationDays = (value: string | number | null | undefined): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(1, Math.floor(value));
+    if (!value) return 1;
+    const n = parseInt(String(value).replace(/\D+/g, ''), 10);
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  };
+
+  const parseProgress = (value: number | string | null | undefined): number => {
+    if (value == null) return 0;
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    if (n <= 1) return Math.round(Math.max(0, Math.min(1, n)) * 100);
+    return Math.round(Math.max(0, Math.min(100, n)));
+  };
+
+  const toDate = (s?: string | null): Date | null => {
+    if (!s) return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  const inferType = (task: BackendTask): Event['type'] => {
+    if (!task.start_date && task.deadline) return 'deadline';
+    return 'other';
+  };
+
+  const inferPriority = (task: BackendTask): Event['priority'] => {
+    const progressPct = parseProgress(task.conclusion); // 0–100
+    if (progressPct >= 100) return 'low';
+
+    const dur = parseDurationDays(task.duration);
+    const start = toDate(task.start_date);
+    const declaredDeadline = toDate(task.deadline);
+
+    // deadline efetiva (usa backend; se não houver, calcula a partir do start+duration)
+    let dl: Date | null = declaredDeadline;
+    if (!dl && start) {
+      const end = new Date(startOfDay(start));
+      end.setDate(end.getDate() + Math.max(1, dur) - 1); // inclusivo
+      dl = end;
+    }
+
+    // Sem deadline: regra simples por trabalho restante
+    if (!dl) {
+      const remainingWorkDays = Math.max(0, Math.ceil(dur * (1 - progressPct / 100)));
+      return remainingWorkDays >= 10 ? 'medium' : 'low';
+    }
+
+    const today = startOfDay(new Date());
+    const deadlineDay = startOfDay(dl);
+    const DAY = 1000 * 60 * 60 * 24;
+
+    const daysToDeadline = Math.floor((deadlineDay.getTime() - today.getTime()) / DAY);
+    const remainingWorkDays = Math.max(0, Math.ceil(dur * (1 - progressPct / 100)));
+    const slack = daysToDeadline - remainingWorkDays;
+
+    if (daysToDeadline < 0 && progressPct < 100) return 'high';
+    if (daysToDeadline >= 7) return 'low';
+
+    // Pouca folga => medium, senão low
+    if (slack <= 2) return 'medium';
+    return 'low';
+  };
+
+  const getProjectLabel = (t: BackendTask): string => {
+    return ((t.project_name) || t.id_file || 'Projeto').toString();
+  };
+
+  const mapTasksToEvents = (tasks: BackendTask[]): Event[] => {
+    return tasks.map((t) => {
+      const duration = parseDurationDays(t.duration);
+      const startCandidate = toDate(t.start_date);
+      const deadline = toDate(t.deadline) || null;
+
+      // 1) usa start_date; 2) se não houver, calcula a partir do deadline e duração; 3) hoje
+      let start = startCandidate || new Date();
+      if (!startCandidate && deadline) {
+        const d = new Date(deadline);
+        d.setDate(d.getDate() - Math.max(1, duration) + 1); // inclusivo
+        start = d;
+      }
+
+      const progress = parseProgress(t.conclusion);
+      const type = inferType(t);
+      const priority = inferPriority(t);
+      const time = start.toTimeString().slice(0, 5);
+
+      const title = `📑 Tarefa: ${t.num} ➡ Projeto: ${getProjectLabel(t)}`;
+
+      return {
+        id: `task-${(t.id_file || 'x')}-${String(t.num)}`,
+        title,
+        date: start,
+        deadline: deadline || undefined,
+        time,
+        type,
+        duration,
+        progress,
+        priority,
+        id_file: t.id_file || undefined,
+        num: t.num,
+      };
+    });
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const resp = await fetch('/api/employee/tasks', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { Accept: 'application/json' },
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text().catch(() => '');
+          throw new Error(msg || `HTTP ${resp.status}`);
+        }
+
+        const payload = await resp.json().catch(() => ({}));
+        const tasks: BackendTask[] = payload?.tasks || [];
+
+        if (isMounted) setEvents(mapTasksToEvents(tasks));
+      } catch (e: any) {
+        if (isMounted) setError(e?.message || 'Falha ao carregar tarefas.');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // UI helpers do calendário
   const monthNames = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
-
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   const getDaysInMonth = (date: Date) => {
@@ -95,26 +203,15 @@ const Calendar: React.FC = () => {
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
 
-    const days = [];
-    
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    
-    // Add all days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day));
-    }
-    
+    const days: (Date | null)[] = [];
+    for (let i = 0; i < startingDayOfWeek; i++) days.push(null);
+    for (let day = 1; day <= daysInMonth; day++) days.push(new Date(year, month, day));
     return days;
   };
 
   const getEventsForDate = (date: Date | null) => {
     if (!date) return [];
-    return events.filter(event => 
-      event.date.toDateString() === date.toDateString()
-    );
+    return events.filter(event => event.date.toDateString() === date.toDateString());
   };
 
   const getEventTypeColor = (type: Event['type']) => {
@@ -133,15 +230,13 @@ const Calendar: React.FC = () => {
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => {
       const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1);
-      } else {
-        newDate.setMonth(prev.getMonth() + 1);
-      }
+      if (direction === 'prev') newDate.setMonth(prev.getMonth() - 1);
+      else newDate.setMonth(prev.getMonth() + 1);
       return newDate;
     });
   };
 
+  // Handlers UI
   const handleAddEvent = () => {
     setEditingEvent(null);
     setShowEventModal(true);
@@ -152,21 +247,51 @@ const Calendar: React.FC = () => {
     setShowEventModal(true);
   };
 
-  const handleSaveEvent = (eventData: Omit<Event, 'id'>) => {
-    if (editingEvent) {
-      // Editar evento existente
-      setEvents(prev => prev.map(event => 
-        event.id === editingEvent.id 
-          ? { ...eventData, id: editingEvent.id }
-          : event
-      ));
-    } else {
-      // Adicionar novo evento
-      const newEvent: Event = {
-        ...eventData,
-        id: `event-${Date.now()}`
-      };
-      setEvents(prev => [...prev, newEvent]);
+  const handleSaveEvent = async (eventData: Omit<Event, 'id'>) => {
+    try {
+      // Se for edição de uma tarefa do backend, faz PATCH
+      if (editingEvent && editingEvent.id_file && typeof editingEvent.num === 'number') {
+        const idFile = editingEvent.id_file;
+        const num = editingEvent.num;
+
+        // Normaliza conclusão (0–1) para o backend desta rota
+        const conclusion = Math.max(0, Math.min(1, (eventData.progress ?? 0) / 100));
+        const duration = Number.isFinite(eventData.duration as number)
+          ? String(eventData.duration)
+          : '1';
+
+        const resp = await fetch(`/api/employee/tasks/update/${encodeURIComponent(idFile)}/${num}`, {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ duration, conclusion }),
+        });
+
+        if (!resp.ok) {
+          const msg = await resp.text().catch(() => '');
+          throw new Error(msg || `Falha HTTP ${resp.status}`);
+        }
+      }
+
+      // Atualiza estado local
+      if (editingEvent) {
+        setEvents(prev =>
+          prev.map(event =>
+            event.id === editingEvent.id
+              ? { ...event, ...eventData }
+              : event
+          )
+        );
+      } else {
+        const newEvent: Event = { ...eventData, id: `event-${Date.now()}` };
+        setEvents(prev => [...prev, newEvent]);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Falha ao atualizar a tarefa no servidor.');
     }
   };
 
@@ -180,9 +305,8 @@ const Calendar: React.FC = () => {
     navigateMonth(direction);
   };
 
-  const handleGanttZoom = (direction: 'in' | 'out') => {
-    // Implementar lógica de zoom se necessário
-    console.log('Zoom:', direction);
+  const handleGanttZoom = (_direction: 'in' | 'out') => {
+    // Lógica adicional pode ser adicionada se necessário
   };
 
   const handleGanttEventClick = (event: Event) => {
@@ -206,8 +330,8 @@ const Calendar: React.FC = () => {
               <button
                 onClick={() => setViewMode('calendar')}
                 className={`px-4 py-2 text-sm rounded-md ${
-                  viewMode === 'calendar' 
-                    ? 'bg-primary text-white' 
+                  viewMode === 'calendar'
+                    ? 'bg-primary text-white'
                     : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                 }`}
               >
@@ -217,8 +341,8 @@ const Calendar: React.FC = () => {
               <button
                 onClick={() => setViewMode('gantt')}
                 className={`px-4 py-2 text-sm rounded-md ${
-                  viewMode === 'gantt' 
-                    ? 'bg-primary text-white' 
+                  viewMode === 'gantt'
+                    ? 'bg-primary text-white'
                     : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                 }`}
               >
@@ -233,13 +357,25 @@ const Calendar: React.FC = () => {
         {/* Main Content */}
         <div className="lg:col-span-2">
           {viewMode === 'gantt' ? (
-            <GanttChart
-              events={events}
-              currentDate={currentDate}
-              onNavigate={handleGanttNavigate}
-              onZoom={handleGanttZoom}
-              onEventClick={handleGanttEventClick}
-            />
+            <div>
+              {loading && (
+                <div className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                  Carregando tarefas...
+                </div>
+              )}
+              {error && (
+                <div className="mb-2 text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+              <GanttChart
+                events={events}
+                currentDate={currentDate}
+                onNavigate={handleGanttNavigate}
+                onZoom={handleGanttZoom}
+                onEventClick={handleGanttEventClick}
+              />
+            </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <div className="flex items-center justify-between mb-6">
@@ -295,9 +431,11 @@ const Calendar: React.FC = () => {
                     >
                       {day && (
                         <>
-                          <div className={`text-sm font-medium mb-1 ${
-                            isToday ? 'text-blue-600' : 'text-gray-900 dark:text-white'
-                          }`}>
+                          <div
+                            className={`text-sm font-medium mb-1 ${
+                              isToday ? 'text-blue-600' : 'text-gray-900 dark:text-white'
+                            }`}
+                          >
                             {day.getDate()}
                           </div>
                           <div className="space-y-1">
@@ -330,7 +468,7 @@ const Calendar: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-medium text-lg text-gray-900 dark:text-white">Eventos</h3>
-              <button 
+              <button
                 onClick={handleAddEvent}
                 className="btn btn-primary flex items-center text-sm"
               >
@@ -342,14 +480,14 @@ const Calendar: React.FC = () => {
             {selectedDate ? (
               <div>
                 <h4 className="font-medium mb-3 text-gray-900 dark:text-white">
-                  {selectedDate.toLocaleDateString('pt-BR', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
+                  {selectedDate.toLocaleDateString('pt-BR', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
                   })}
                 </h4>
-                
+
                 {selectedDateEvents.length > 0 ? (
                   <div className="space-y-3">
                     {selectedDateEvents.map(event => (
@@ -404,7 +542,7 @@ const Calendar: React.FC = () => {
             )}
           </div>
 
-          {/* Upcoming Events */}
+          {/* Próximos Eventos */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <h3 className="font-medium text-lg mb-4 text-gray-900 dark:text-white">Próximos Eventos</h3>
             <div className="space-y-3">
@@ -414,11 +552,17 @@ const Calendar: React.FC = () => {
                 .slice(0, 5)
                 .map(event => (
                   <div key={event.id} className="flex items-start space-x-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded">
-                    <div className={`w-3 h-3 rounded-full mt-1 ${
-                      event.type === 'meeting' ? 'bg-blue-500' :
-                      event.type === 'deadline' ? 'bg-red-500' :
-                      event.type === 'review' ? 'bg-yellow-500' : 'bg-gray-500'
-                    }`} />
+                    <div
+                      className={`w-3 h-3 rounded-full mt-1 ${
+                        event.type === 'meeting'
+                          ? 'bg-blue-500'
+                          : event.type === 'deadline'
+                          ? 'bg-red-500'
+                          : event.type === 'review'
+                          ? 'bg-yellow-500'
+                          : 'bg-gray-500'
+                      }`}
+                    />
                     <div className="flex-1">
                       <div className="font-medium text-sm text-gray-900 dark:text-white">{event.title}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">

@@ -3,18 +3,19 @@ import { X, Calendar, Clock, MapPin, Users, FileText } from 'lucide-react';
 
 interface Event {
   id: string;
-  title: string;
+  title: string; // "<num> - <projeto>"
   date: Date;
   time: string;
   type: 'meeting' | 'deadline' | 'review' | 'other';
   participants?: string[];
   location?: string;
   description?: string;
-  // Campos para Gantt
-  duration?: number; // duração em dias
-  progress?: number; // progresso de 0 a 100
-  dependencies?: string[]; // IDs dos eventos dos quais depende
+  duration?: number;       // duração em dias
+  progress?: number;       // 0 a 100
+  dependencies?: string[];
   priority?: 'low' | 'medium' | 'high';
+  id_file?: string;
+  num?: number;
 }
 
 interface EventModalProps {
@@ -310,20 +311,6 @@ const EventModal: React.FC<EventModalProps> = ({
                 <option value="medium">Média</option>
                 <option value="high">Alta</option>
               </select>
-            </div>
-
-            {/* Dependências */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Dependências (IDs dos eventos)
-              </label>
-              <input
-                type="text"
-                value={formData.dependencies}
-                onChange={(e) => setFormData(prev => ({ ...prev, dependencies: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="ID1, ID2, ID3"
-              />
             </div>
           </div>
 
