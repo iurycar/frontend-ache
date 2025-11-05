@@ -12,8 +12,8 @@ interface Event {
   description?: string;
   duration?: number;
   progress?: number;
-  dependencies?: string[];
   priority?: 'low' | 'medium' | 'high';
+  deadline?: Date; 
 }
 
 interface GanttChartProps {
@@ -37,13 +37,13 @@ const GanttChart: React.FC<GanttChartProps> = ({
   const getEventTypeColor = (type: Event['type']) => {
     switch (type) {
       case 'meeting':
-        return 'bg-blue-500';
+        return 'bg-green-500';
       case 'deadline':
         return 'bg-red-500';
       case 'review':
         return 'bg-yellow-500';
       default:
-        return 'bg-gray-500';
+        return 'bg-blue-400';
     }
   };
 
@@ -54,7 +54,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
       case 'medium':
         return 'border-l-4 border-yellow-500';
       case 'low':
-        return 'border-l-4 border-green-500';
+        return 'border-l-4 border-green-600';
       default:
         return 'border-l-4 border-gray-500';
     }
@@ -66,7 +66,6 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return width;
   };
 
-  // ✅ 1. Geração da linha do tempo agora é dinâmica e memoizada
   const timeline = useMemo(() => {
     const days = [];
     let startDate = new Date(currentDate);
@@ -89,27 +88,47 @@ const GanttChart: React.FC<GanttChartProps> = ({
     return days;
   }, [currentDate, viewMode]);
 
+  // Normaliza para 00:00 para evitar desvios por timezone/DST
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
   const calculateEventPosition = (event: Event) => {
-    // ✅ 2. O início da linha do tempo agora é o primeiro dia do array 'timeline'
-    const timelineStart = timeline[0]; 
-    if (!timelineStart) return { left: 0, width: 0, endDate: event.date };
+    const timelineStartRaw = timeline[0];
+    const timelineEndRaw = timeline[timeline.length - 1];
+    if (!timelineStartRaw || !timelineEndRaw) return { left: 0, width: 0, endDate: event.date };
 
-    const startDate = event.date;
-    const duration = event.duration || 1;
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + duration - 1);
+    const timelineStart = startOfDay(timelineStartRaw);
+    const timelineEnd = startOfDay(timelineEndRaw);
 
-    const daysDiff = Math.floor((startDate.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const startDate = startOfDay(event.date);
+    // Se vier deadline do backend, usa; senão, calcula pelo duration
+    let endDate = event.deadline ? startOfDay(event.deadline) : startOfDay(event.date);
+    if (!event.deadline) {
+      const dur = Math.max(1, event.duration || 1);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + dur - 1); // inclusivo
+    }
+
+    const DAY = 1000 * 60 * 60 * 24;
     const columnWidth = getColumnWidth();
-    
-    // O posicionamento e a largura agora usam a largura da coluna correta
-    const leftPosition = daysDiff * columnWidth * zoomLevel;
-    const width = duration * columnWidth * zoomLevel;
+
+    // Fora do intervalo visível
+    if (endDate.getTime() < timelineStart.getTime() || startDate.getTime() > timelineEnd.getTime()) {
+      return { left: 0, width: 0, endDate };
+    }
+
+    // Recorte ao intervalo visível
+    const visibleStart = startDate.getTime() < timelineStart.getTime() ? timelineStart : startOfDay(startDate);
+    const visibleEnd = endDate.getTime() > timelineEnd.getTime() ? timelineEnd : startOfDay(endDate);
+
+    const leftDays = Math.floor((visibleStart.getTime() - timelineStart.getTime()) / DAY);
+    const visibleDays = Math.floor((visibleEnd.getTime() - visibleStart.getTime()) / DAY) + 1; // inclusivo
+
+    const leftPosition = leftDays * columnWidth * zoomLevel;
+    const width = visibleDays * columnWidth * zoomLevel;
 
     return {
       left: Math.max(0, leftPosition),
-      width: Math.max(20, width), // Garante uma largura mínima
+      width: Math.max(20, width),
       endDate
     };
   };
@@ -254,7 +273,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                           left: `${position.left}px`,
                           width: `${position.width}px`,
                           height: '24px',
-                          background: `linear-gradient(to right, ${getComputedStyle(document.documentElement).getPropertyValue('--' + event.type + '-color') || '#4A90E2'} ${progress}%, #e0e0e0 ${progress}%)`
+                          background: `linear-gradient(to right, ${getComputedStyle(document.documentElement).getPropertyValue('--' + event.type + '-color') || '#4A90E2'} ${progress}%, #757575ff ${progress}%)`
                         }}
                         onClick={() => onEventClick(event)}
                       >
@@ -262,7 +281,7 @@ const GanttChart: React.FC<GanttChartProps> = ({
                             className={`h-full rounded-l ${getEventTypeColor(event.type)}`}
                             style={{ width: `${progress}%` }}
                         >
-                            <div className="flex items-center justify-center h-full text-white text-xs font-medium px-2 truncate">
+                            <div className="flex items-center justify-center h-full text-black text-xs font-medium px-2 truncate">
                                 {progress > 0 && `${progress}%`}
                             </div>
                         </div>
