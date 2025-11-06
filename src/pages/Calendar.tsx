@@ -161,7 +161,7 @@ const Calendar: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        const resp = await fetch('/api/employee/tasks', {
+        const resp = await fetch('/api/employee/tasks/gantt', {
           method: 'GET',
           credentials: 'include',
           headers: { Accept: 'application/json' },
@@ -260,7 +260,7 @@ const Calendar: React.FC = () => {
           ? String(eventData.duration)
           : '1';
 
-        const resp = await fetch(`/api/employee/tasks/update/${encodeURIComponent(idFile)}/${num}`, {
+        const resp = await fetch(`/api/employee/tasks/gantt/update/${encodeURIComponent(idFile)}/${num}`, {
           method: 'PATCH',
           credentials: 'include',
           headers: {
