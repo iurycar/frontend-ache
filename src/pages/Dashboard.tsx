@@ -5,6 +5,10 @@ import { useSpreadsheet } from '../contexts/SpreadsheetContext';
 import FilterPanel from '../components/FilterPanel';
 import ScheduleTable, { Task } from '../components/ScheduleTable';
 
+interface CurrentUser {
+  name: string;
+}
+
 const Dashboard: React.FC = () => {
   const { t } = useLocale();
   const { importedSpreadsheets, addSpreadsheet } = useSpreadsheet();
@@ -16,6 +20,37 @@ const Dashboard: React.FC = () => {
   const [tasksError, setTasksError] = useState<string | null>(null);
 
   const didFetchFilesRef = useRef(false);
+  const tasksRef = useRef<Task[]>([]);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+  const fetchAuth = async () => {
+    try {
+      const res = await fetch('/api/user', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.user?.name) setCurrentUser({ name: data.user.name });
+    } catch {}
+  };
+  fetchAuth();
+}, []);
+
+  // Helper: garante o nome do usuário quando precisar
+  const getCurrentUserName = async (): Promise<string> => {
+    if (currentUser?.name) return currentUser.name;
+    try {
+      const res = await fetch('/api/auth/status', { credentials: 'include' });
+      if (!res.ok) return '';
+      const data = await res.json();
+      return data?.user?.name || '';
+    } catch {
+      return '';
+    }
+  };
 
   useEffect(() => {
     const fetchFromBackend = async () => {
@@ -110,13 +145,31 @@ const Dashboard: React.FC = () => {
     fetchSpreadsheetTasks(selectedSpreadsheetId);
   }, [selectedSpreadsheetId]);
 
+  // INICIAR
   const handleTaskStart = async (id: string) => {
     if (!selectedSpreadsheetId || selectedSpreadsheetId === 'null') {
       alert('Esta ação não está disponível quando "Todos os projetos" está selecionado.');
       return;
     }
+    const prev = tasksRef.current;
+    const nowIso = new Date().toISOString();
+
+    // Garante nome antes do update otimista
+    const who = (currentUser?.name && currentUser.name.trim()) ? currentUser.name : await getCurrentUserName();
+
+    setTasks(prev.map(t => 
+      t.id === id 
+        ? { 
+            ...t, 
+            startDate: t.startDate || nowIso, 
+            percentualConcluido: t.percentualConcluido || 0,
+            responsavel: (t.responsavel && t.responsavel.trim() !== '') ? t.responsavel : (who || ''),
+          } 
+        : t
+    ));
+
     try {
-      const task = tasks.find((t) => t.id === id);
+      const task = prev.find(t => t.id === id);
       const num = Number(task?.numero);
       if (!Number.isFinite(num)) throw new Error('Número de linha inválido');
       const res = await fetch(
@@ -124,34 +177,60 @@ const Dashboard: React.FC = () => {
         { method: 'POST', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao iniciar tarefa');
-      await fetchSpreadsheetTasks(selectedSpreadsheetId);
     } catch {
+      setTasks(prev); // revert
       alert('Não foi possível iniciar a tarefa.');
     }
   };
 
+  // SALVAR / EDITAR
   const handleTaskUpdate = async (updated: Task) => {
     if (!selectedSpreadsheetId || selectedSpreadsheetId === 'null') {
       alert('Não é possível salvar quando "Todos os projetos" está selecionado.');
       return;
     }
+
+    const prev = tasksRef.current;
+
+    const nomeResp = (updated.responsavel || '').trim();
+    const userId = (updated.userId ?? '').toString().trim();
+
+    const next = prev.map(t =>
+      t.id === updated.id ? { ...t, ...updated, responsavel: nomeResp, userId: userId || null } : t
+    );
+    setTasks(next);
+
     try {
       const linhaNumRaw = Number(updated.numero);
       const isNew = !Number.isFinite(linhaNumRaw) || linhaNumRaw < 1;
 
-      const payloadBase = {
+      const parseDuration = (d: string) => {
+        if (!d) return '';
+        const m = String(d).match(/(\d+)/);
+        return m ? m[1] : String(d);
+      };
+
+      const payload: any = {
         classe: updated.classificacao,
         category: updated.categoria,
         phase: updated.fase,
         status: updated.condicao,
         name: updated.nome,
-        duration: updated.duracao,
+        duration: parseDuration(updated.duracao),
         conclusion: Number.isFinite(updated.percentualConcluido)
           ? Number(updated.percentualConcluido) / 100
           : 0,
-        responsible: (updated.userId ?? '').toString().trim() || '',  // antes usava nome
+        text: updated.text || '',
+        reference: updated.reference || '',
       };
-      const payload = isNew ? payloadBase : { ...payloadBase, num: linhaNumRaw };
+
+      // Sempre envia user_id quando a propriedade existe (mesmo vazio)
+      if (updated.userId !== undefined) {
+        payload.user_id = userId; // '' | 'uuid' | etc.
+      }
+      if (!isNew) {
+        payload.num = linhaNumRaw;
+      }
 
       const url = isNew
         ? `/api/arquivo/${selectedSpreadsheetId}/linha/0`
@@ -164,32 +243,36 @@ const Dashboard: React.FC = () => {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error('Falha ao salvar tarefa');
-      await fetchSpreadsheetTasks(selectedSpreadsheetId);
     } catch {
-      alert('Não foi possível salvar a tarefa no servidor.');
+      setTasks(prev); // revert
+      alert('Não foi possível salvar a tarefa no servidor (revertido).');
     }
   };
 
+  // EXCLUIR
   const handleTaskDelete = async (id: string) => {
     if (!selectedSpreadsheetId || selectedSpreadsheetId === 'null') {
       alert('Não é possível excluir quando "Todos os projetos" está selecionado.');
       return;
     }
+    const prev = tasksRef.current;
+    const toDelete = prev.find(t => t.id === id);
+    setTasks(prev.filter(t => t.id !== id));
     try {
-      const task = tasks.find((t) => t.id === id);
-      const num = Number(task?.numero);
+      const num = Number(toDelete?.numero);
       if (!Number.isFinite(num)) throw new Error('Número de linha inválido');
       const res = await fetch(
         `/api/arquivo/${selectedSpreadsheetId}/linha/${num}`,
         { method: 'DELETE', credentials: 'include' }
       );
       if (!res.ok) throw new Error('Falha ao excluir a tarefa.');
-      await fetchSpreadsheetTasks(selectedSpreadsheetId);
     } catch {
-      alert('Não foi possível excluir a tarefa no servidor.');
+      setTasks(prev); // revert
+      alert('Não foi possível excluir a tarefa no servidor (revertido).');
     }
   };
 
+  // ADICIONAR
   const handleTaskAdd = () => {
     const newId =
       typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}`;
@@ -206,8 +289,10 @@ const Dashboard: React.FC = () => {
         duracao: '',
         percentualConcluido: 0,
         responsavel: '',
-        userId: null,         // novo campo
-      } as unknown as Task,
+        userId: null,
+        text: '',
+        reference: '',
+      } as Task,
     ]);
   };
 
@@ -278,7 +363,6 @@ const Dashboard: React.FC = () => {
           tasks={filteredTasks}
           loading={loadingTasks}
           error={tasksError}
-          onRefresh={() => fetchSpreadsheetTasks(selectedSpreadsheetId)}
           onTaskUpdate={handleTaskUpdate}
           onTaskDelete={handleTaskDelete}
           onTaskAdd={handleTaskAdd}
