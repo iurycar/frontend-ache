@@ -49,6 +49,13 @@ const Reports: React.FC = () => {
     { id: '3', name: 'Performance da Equipe - Maio 2024', type: 'team', createdAt: new Date(2024, 4, 30), status: 'completed', size: '950 KB' }
   ]);
 
+  // Séries mensais
+  const [monthlyLabels, setMonthlyLabels] = useState<string[]>([]);
+  const [monthlyTasks, setMonthlyTasks] = useState<number[]>([]);
+  const [monthlyProjects, setMonthlyProjects] = useState<number[]>([]);
+  const [monthlyError, setMonthlyError] = useState<string | null>(null);
+  const [loadingMonthly, setLoadingMonthly] = useState<boolean>(false);
+
   // Carrega projetos do time para o seletor
   useEffect(() => {
     const loadProjects = async () => {
@@ -67,13 +74,12 @@ const Reports: React.FC = () => {
     loadProjects();
   }, []);
 
-  // Busca o progresso quando o projeto selecionado muda
+  // Busca o progresso (snapshot) quando o projeto selecionado muda
   useEffect(() => {
     const fetchProgress = async () => {
       setLoadingProgress(true);
       setProgressError(null);
       try {
-        // 'null' informa ao backend para somar todos os projetos do time
         const idParam = selectedProjectId === 'all' ? 'null' : selectedProjectId;
         const res = await fetch(`/api/project/progress_tasks/${idParam}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Falha ao buscar progresso');
@@ -95,6 +101,34 @@ const Reports: React.FC = () => {
     };
     fetchProgress();
   }, [selectedProjectId]);
+
+  // Busca séries mensais (tarefas + projetos concluídos)
+  useEffect(() => {
+    const fetchMonthly = async () => {
+      setLoadingMonthly(true);
+      setMonthlyError(null);
+      try {
+        const idParam = selectedProjectId === 'all' ? 'null' : selectedProjectId;
+        const res = await fetch(`/api/project/completed?id_file=${encodeURIComponent(idParam)}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Falha ao carregar séries mensais');
+        const json = await res.json();
+        const labels: string[] = json?.labels ?? [];
+        const tasks: number[] = json?.tasks_concluded ?? [];
+        const projects: number[] = json?.project_concluded ?? [];
+        setMonthlyLabels(labels);
+        setMonthlyTasks(tasks);
+        setMonthlyProjects(projects);
+      } catch (e) {
+        setMonthlyError('Não foi possível carregar o progresso mensal.');
+        setMonthlyLabels([]);
+        setMonthlyTasks([]);
+        setMonthlyProjects([]);
+      } finally {
+        setLoadingMonthly(false);
+      }
+    };
+    fetchMonthly();
+  }, [selectedProjectId, selectedPeriod]);
 
   const getStatusColor = (status: ReportData['status']) => {
     switch (status) {
@@ -134,13 +168,13 @@ const Reports: React.FC = () => {
     ],
   }), [progress]);
 
-  const monthlyProgressData = {
-    labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+  const monthlyProgressData = useMemo(() => ({
+    labels: monthlyLabels.length ? monthlyLabels : ['Jan','Fev','Mar','Abr','Mai','Jun'],
     datasets: [
-      { label: 'Tarefas Concluídas', data: [12, 19, 15, 25, 22, 30], backgroundColor: '#D92567', borderColor: '#D92567', borderWidth: 1 },
-      { label: 'Projetos Finalizados', data: [8, 11, 9, 15, 14, 18], backgroundColor: '#F2357B', borderColor: '#F2357B', borderWidth: 1 },
+      { label: 'Tarefas Concluídas', data: monthlyTasks.length ? monthlyTasks : Array(6).fill(0), backgroundColor: '#D92567', borderColor: '#D92567', borderWidth: 1 },
+      { label: 'Projetos Finalizados', data: monthlyProjects.length ? monthlyProjects : Array(6).fill(0), backgroundColor: '#F2357B', borderColor: '#F2357B', borderWidth: 1 },
     ],
-  };
+  }), [monthlyLabels, monthlyTasks, monthlyProjects]);
 
   return (
     <Layout title="Relatórios">
@@ -235,11 +269,13 @@ const Reports: React.FC = () => {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
             <h3 className="font-medium text-lg mb-4">Progresso Mensal</h3>
+            {monthlyError && <div className="text-red-600 mb-2">{monthlyError}</div>}
             <div className="h-64">
               <Bar 
                 data={monthlyProgressData} 
-                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }}
+                options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }}
               />
+              {loadingMonthly && <div className="text-sm text-gray-500 mt-2">Carregando...</div>}
             </div>
           </div>
         </div>

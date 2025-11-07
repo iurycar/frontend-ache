@@ -25,7 +25,6 @@ interface ScheduleTableProps {
   tasks: Task[];
   loading?: boolean;
   error?: string | null;
-  onRefresh?: () => void;
   onTaskUpdate?: (task: Task) => void | Promise<void>;
   onTaskDelete?: (id: string) => void | Promise<void>;
   onTaskAdd?: () => void;
@@ -94,7 +93,6 @@ function shortEmployeeName(full?: string | null): string {
 
   const firstName = parts[0];
 
-  // Remove partículas comuns dos sobrenomes
   const stop = new Set(['da', 'de', 'do', 'das', 'dos', 'e', "d'", 'di', 'del', 'della', 'van', 'von', 'der']);
   const surnames = parts.slice(1).filter((p) => !stop.has(p.toLowerCase()));
 
@@ -111,24 +109,10 @@ function shortEmployeeName(full?: string | null): string {
   return `${firstName} ${fi || li}.`;
 }
 
-// Texto para exibição (fallback “Não definido”)
-function displayResponsible(t: any): string {
-  const raw = getResponsibleRaw(t);
-  return raw ? shortEmployeeName(raw) : 'Não definido';
-}
-
-// Pode editar? Somente se vazio ou “Não definido”
-function canEditResponsible(t: any): boolean {
-  const raw = getResponsibleRaw(t);
-  if (!raw) return true;
-  return raw.toLowerCase() === 'não definido';
-}
-
 const ScheduleTable: React.FC<ScheduleTableProps> = ({
   tasks,
   loading,
   error,
-  onRefresh,
   onTaskUpdate,
   onTaskDelete,
   onTaskAdd,
@@ -170,6 +154,31 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     fetchEmployees();
   }, []);
 
+  // Mapas para resolver id <-> nome
+  const employeesById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of employees) {
+      if (!e) continue;
+      m.set(String(e.id), e.name);
+    }
+    return m;
+  }, [employees]);
+
+  const employeesByName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of employees) {
+      if (!e?.name) continue;
+      m.set(e.name.trim().toLowerCase(), String(e.id));
+    }
+    return m;
+  }, [employees]);
+
+  const getUserIdByName = (name?: string | null): string | null => {
+    if (!name) return null;
+    const id = employeesByName.get(String(name).trim().toLowerCase());
+    return id || null;
+  };
+
   const classificacaoOpts = useMemo(
     () => classificacaoOptions ?? uniqueNonEmpty(tasks.map((t) => t.classificacao)),
     [classificacaoOptions, tasks]
@@ -187,41 +196,23 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     return tasks.every((task) => task.percentualConcluido === 100);
   }, [tasks]);
 
-  const handleCompleteProject = async () => {
-    if (!idFile) return;
+  const preserveScroll = async (fn: () => Promise<void> | void) => {
+    const y = typeof window !== 'undefined' ? window.scrollY : 0;
     try {
-      setIsCompletingProject(true);
-      const res = await fetch(`/api/projects/completed/${idFile}`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error('Falha ao concluir o projeto');
-      const data = await res.json();
-      alert(data.mensagem || 'Projeto concluído com sucesso!');
-      if (onRefresh) await onRefresh();
-    } catch (error) {
-      console.error('Erro ao concluir projeto:', error);
-      alert('Não foi possível concluir o projeto.');
+      await Promise.resolve(fn());
     } finally {
-      setIsCompletingProject(false);
-      setShowConfirmCompleteProject(false);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: y, behavior: 'auto' });
+      }
     }
-  };
-
-  const handleConfirmCompleteProject = () => {
-    setShowConfirmCompleteProject(true);
-  };
-
-  const handleCancelCompleteProject = () => {
-    setShowConfirmCompleteProject(false);
   };
 
   const handleConfirmStart = async () => {
     if (confirmStartId && onTaskStart) {
       try {
-        await Promise.resolve(onTaskStart(confirmStartId));
-        if (onRefresh) await Promise.resolve(onRefresh());
-        else if (typeof window !== 'undefined') window.location.reload();
+        await preserveScroll(async () => {
+          await Promise.resolve(onTaskStart(confirmStartId));
+        });
       } catch (e) {
         console.error('Erro ao iniciar tarefa:', e);
       } finally {
@@ -230,14 +221,42 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     }
   };
 
-  const handleCancelStart = () => {
-    setConfirmStartId(null);
+  // Dispara conclusão do projeto no backend
+  const handleConfirmCompleteProject = async () => {
+    if (!idFile || idFile === 'null') {
+      alert('Selecione um projeto específico para concluir.');
+      setShowConfirmCompleteProject(false);
+      return;
+    }
+    setIsCompletingProject(true);
+    try {
+      const res = await fetch('/api/projects/completed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id_file: idFile }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.mensagem || 'Falha ao concluir o projeto.');
+      }
+      // Backend pode responder 200 com mensagens de validação também
+      alert(data?.mensagem || 'Projeto marcado como concluído com sucesso.');
+      setShowConfirmCompleteProject(false);
+    } catch (e) {
+      console.error(e);
+      alert('Não foi possível concluir o projeto.');
+      // mantém o modal aberto para o usuário tentar novamente/ler
+    } finally {
+      setIsCompletingProject(false);
+    }
   };
 
   const startEdit = (task: Task) => {
     const respRaw = getResponsibleRaw(task);
+    const fallbackId = task.userId || getUserIdByName(respRaw);
     setEditingId(task.id);
-    setEditedTask({ ...task, responsavel: respRaw, userId: task.userId || task.userId });
+    setEditedTask({ ...task, responsavel: respRaw, userId: fallbackId || null });
   };
 
   const cancelEdit = () => {
@@ -248,17 +267,22 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   const saveEdit = async () => {
     if (!editedTask) return;
     const p = Math.max(0, Math.min(100, Math.round(Number(editedTask.percentualConcluido) || 0)));
+
+    // Garante que vamos enviar um userId válido se houver nome
+    const ensuredUserId = editedTask.userId || getUserIdByName(editedTask.responsavel || '') || null;
+
     try {
-      if (onTaskUpdate) {
-        await Promise.resolve(
-          onTaskUpdate({
-            ...editedTask,
-            percentualConcluido: p,
-          })
-        );
-      }
-      if (onRefresh) await Promise.resolve(onRefresh());
-      else if (typeof window !== 'undefined') window.location.reload();
+      await preserveScroll(async () => {
+        if (onTaskUpdate) {
+          await Promise.resolve(
+            onTaskUpdate({
+              ...editedTask,
+              userId: ensuredUserId,
+              percentualConcluido: p,
+            })
+          );
+        }
+      });
     } catch (e) {
       console.error('Erro no salvar:', e);
     } finally {
@@ -272,7 +296,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     setEditedTask({ ...editedTask, [field]: value });
   };
 
-  // Ordenação ativa somente nas colunas: Número, Categoria, Fase, Condição, Nome e Concluído
   type SortKey = 'numero' | 'categoria' | 'fase' | 'condicao' | 'nome' | 'percentualConcluido';
 
   const [sortKey, setSortKey] = useState<SortKey>('numero');
@@ -295,7 +318,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     const na = Number.isFinite(Number(a)) ? Number(a) : NaN;
     const nb = Number.isFinite(Number(b)) ? Number(b) : NaN;
     if (isNaN(na) && isNaN(nb)) return 0;
-    if (isNaN(na)) return 1; // NaN vai pro fim
+    if (isNaN(na)) return 1;
     if (isNaN(nb)) return -1;
     return na - nb;
   };
@@ -342,13 +365,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
     return (
       <div className="text-center text-red-600 mt-10">
         {error}
-        {onRefresh && (
-          <div className="mt-2">
-            <button className="text-primary underline" onClick={onRefresh}>
-              Tentar novamente
-            </button>
-          </div>
-        )}
       </div>
     );
   }
@@ -360,13 +376,13 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleConfirmCompleteProject}
+            onClick={() => setShowConfirmCompleteProject(true)}
             className={`btn flex items-center text-sm border ${
-              allTasksCompleted
+              tasks.every((task) => task.percentualConcluido === 100)
                 ? 'btn-success border-green-600 text-black rounded hover:bg-green-400 dark:text-white dark:hover:text-black dark:hover:bg-green-200'
                 : 'btn-disabled border-gray-400 opacity-50 cursor-not-allowed'
             }`}
-            disabled={!allTasksCompleted || isCompletingProject}
+            disabled={!tasks.every((task) => task.percentualConcluido === 100) || isCompletingProject}
           >
             <CheckCircle size={16} className="mr-1" />
             {isCompletingProject ? 'Concluindo...' : 'Concluir Projeto'}
@@ -391,62 +407,43 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
             <thead className="bg-gray-200 dark:bg-gray-800">
               <tr>
-                {/* Início - sem ordenação */}
                 <th className="px-10 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   Início
                 </th>
-
-                {/* Número - com ordenação */}
                 <th className="px-2 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   <button type="button" onClick={() => toggleSort('numero')} className="flex items-center gap-1" title="Ordenar por número">
                     Número {renderSortIcon('numero')}
                   </button>
                 </th>
-
-                {/* Classificação - sem ordenação */}
                 <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   Classificação
                 </th>
-
-                {/* Categoria - com ordenação */}
                 <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   <button type="button" onClick={() => toggleSort('categoria')} className="flex items-center gap-1" title="Ordenar por categoria">
                     Categoria {renderSortIcon('categoria')}
                   </button>
                 </th>
-
-                {/* Fase - com ordenação */}
                 <th className="px-5 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   <button type="button" onClick={() => toggleSort('fase')} className="flex items-center gap-1" title="Ordenar por fase">
                     Fase {renderSortIcon('fase')}
                   </button>
                 </th>
-
-                {/* Condição - com ordenação */}
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   <button type="button" onClick={() => toggleSort('condicao')} className="flex items-center gap-1" title="Ordenar por condição">
                     Condição {renderSortIcon('condicao')}
                   </button>
                 </th>
-
-                {/* Nome - com ordenação */}
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   <button type="button" onClick={() => toggleSort('nome')} className="flex items-center gap-1" title="Ordenar por nome">
                     Nome {renderSortIcon('nome')}
                   </button>
                 </th>
-
-                {/* Como fazer - sem ordenação */}
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   Como fazer
                 </th>
-
-                {/* Duração - sem ordenação */}
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   Duração
                 </th>
-
-                {/* Concluído - com ordenação */}
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   <button
                     type="button"
@@ -457,12 +454,9 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                     Concluído {renderSortIcon('percentualConcluido')}
                   </button>
                 </th>
-
-                {/* Status - sem ordenação */}
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">
                   Status
                 </th>
-
                 {(onTaskUpdate || onTaskDelete) && (
                   <th className="px-4 py-4 text-left text-xs font-medium text-gray-700 dark:text-gray-200 uppercase">Ações</th>
                 )}
@@ -473,6 +467,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                 const isEditing = editingId === t.id;
                 const row = isEditing && editedTask ? editedTask : t;
 
+                // Status label
                 let text = 'Andamento';
                 let cls = 'bg-yellow-100 text-yellow-800';
                 const atraso = Number(row.atraso || 0);
@@ -491,8 +486,11 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                 const isCompleted = pct === 100;
                 const canUnstart = (pct > 0 && pct < 100) || (!!row.startDate && !isCompleted);
 
+                // Resolver nome e id para exibição/seleção
                 const respRaw = getResponsibleRaw(row);
-                const editableResp = canEditResponsible(row);
+                const resolvedName = respRaw || (row.userId ? (employeesById.get(String(row.userId)) || '') : '');
+                const showDisplayName = resolvedName ? shortEmployeeName(resolvedName) : 'Não definido';
+                const selectValue = row.userId || getUserIdByName(respRaw) || '';
 
                 return (
                   <tr key={t.id} className="hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -504,28 +502,25 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                             <div className="flex items-center gap-2">
                               <select
                                 className="px-2 py-1 border rounded text-xs dark:bg-gray-800 dark:border-gray-700"
-                                disabled={!editableResp || loadingEmployees || employees.length === 0}
-                                value={row.userId || ''}
-                                onChange={(e) => handleField('userId', e.target.value)}
-                                title={
-                                  !editableResp
-                                    ? 'Responsável já designado, não pode ser alterado'
-                                    : 'Selecionar responsável'
-                                }
+                                disabled={loadingEmployees || employees.length === 0}
+                                value={selectValue}
+                                onChange={(e) => {
+                                  const uid = e.target.value;
+                                  const empName = employeesById.get(uid) || '';
+                                  // Sempre manter id (FK) e nome para exibição
+                                  handleField('userId', (uid || null) as any);
+                                  handleField('responsavel', empName as any);
+                                }}
                               >
-                                <option value="">
-                                  {loadingEmployees ? 'Carregando...' : 'Selecionar'}
-                                </option>
+                                <option value="">{loadingEmployees ? 'Carregando...' : 'Selecionar'}</option>
                                 {employees.map((u) => (
-                                  <option key={u.id ?? u.name} value={u.id}>
-                                    {shortEmployeeName(u.name)}
-                                  </option>
+                                  <option key={u.id} value={u.id}>{shortEmployeeName(u.name)}</option>
                                 ))}
                               </select>
                             </div>
                           ) : (
                             <div className="text-sm text-gray-900 dark:text-gray-100">
-                              {displayResponsible(row)}
+                              {showDisplayName}
                             </div>
                           )}
                           {row.startDate && (
@@ -638,7 +633,6 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                       )}
                     </td>
 
-                    {/* Como fazer */}
                     <td className="px-4 py-6 text-sm text-gray-900 dark:text-gray-100">
                       <div className="flex flex-col">
                         <span className="text-sm">{row.text || '-'}</span>
@@ -687,22 +681,22 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
 
                     <td className="px-2 py-1 text-sm text-center whitespace-nowrap">
                       {(() => {
-                        let text = 'Andamento';
-                        let cls = 'bg-yellow-100 text-yellow-800';
-                        const atraso = Number(row.atraso || 0);
+                        let s = 'Andamento';
+                        let cls2 = 'bg-yellow-100 text-yellow-800';
+                        const atraso2 = Number(row.atraso || 0);
                         if (row.percentualConcluido === 100) {
-                          text = 'Concluída';
-                          cls = 'bg-green-100 text-green-800';
-                        } else if (atraso > 0) {
-                          text = 'Atrasada';
-                          cls = 'bg-red-100 text-red-800';
+                          s = 'Concluída';
+                          cls2 = 'bg-green-100 text-green-800';
+                        } else if (atraso2 > 0) {
+                          s = 'Atrasada';
+                          cls2 = 'bg-red-100 text-red-800';
                         } else if (row.percentualConcluido === 0) {
-                          text = 'Não iniciada';
-                          cls = 'bg-gray-100 text-gray-800';
+                          s = 'Não iniciada';
+                          cls2 = 'bg-gray-100 text-gray-800';
                         }
                         return (
                           <div className="flex flex-col items-center">
-                            <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls}`}>{text}</span>
+                            <span className={`inline-flex px-2 py-1 text-xs rounded-full ${cls2}`}>{s}</span>
                             {Number(row.atraso || 0) > 0 && (
                               <span className="mt-1 text-[11px] text-red-600">
                                 Atraso: {Number(row.atraso)} dia{Number(row.atraso) > 1 ? 's' : ''}
@@ -771,10 +765,9 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
         </div>
       )}
 
-      {/* Modal de confirmação para concluir projeto */}
       {showConfirmCompleteProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={handleCancelCompleteProject} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowConfirmCompleteProject(false)} />
           <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
             <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
               Confirmação
@@ -785,27 +778,28 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                className="px-3 py-2 text-sm border rounded dark:border-gray-600"
-                onClick={handleCancelCompleteProject}
+                className="px-3 py-2 text-sm border rounded dark:border-gray-600 disabled:opacity-60"
+                onClick={() => setShowConfirmCompleteProject(false)}
+                disabled={isCompletingProject}
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                className="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-                onClick={handleCompleteProject}
+                className="px-3 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-60"
+                onClick={handleConfirmCompleteProject}
+                disabled={isCompletingProject}
               >
-                Sim, concluir
+                {isCompletingProject ? 'Concluindo...' : 'Sim, concluir'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de confirmação para iniciar tarefa */}
       {confirmStartId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={handleCancelStart} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmStartId(null)} />
           <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
             <h4 className="text-lg font-semibold text-gray-700 dark:text-gray-300">
               Confirmação
@@ -817,7 +811,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
               <button
                 type="button"
                 className="px-3 py-2 text-sm border rounded dark:border-gray-600"
-                onClick={handleCancelStart}
+                onClick={() => setConfirmStartId(null)}
               >
                 Cancelar
               </button>
@@ -835,7 +829,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
 
       {deleteStage === 2 && pendingDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteStage(0)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setDeleteStage(0); }} />
           <div className="relative z-50 w-full max-w-md bg-white dark:bg-gray-900 rounded-lg shadow-xl border dark:border-gray-700 p-6">
             <h4 className="text-lg font-semibold text-red-700 dark:text-red-400">
               Confirmação
@@ -856,11 +850,11 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                 className="px-3 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700"
                 onClick={async () => {
                   try {
-                    if (onTaskDelete && pendingDeleteId) {
-                      await Promise.resolve(onTaskDelete(pendingDeleteId));
-                      if (onRefresh) await Promise.resolve(onRefresh());
-                      else if (typeof window !== 'undefined') window.location.reload();
-                    }
+                    await preserveScroll(async () => {
+                      if (onTaskDelete && pendingDeleteId) {
+                        await Promise.resolve(onTaskDelete(pendingDeleteId));
+                      }
+                    });
                   } finally {
                     setDeleteStage(0);
                     setPendingDeleteId(null);
